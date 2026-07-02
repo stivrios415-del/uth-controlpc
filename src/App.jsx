@@ -73,18 +73,27 @@ function App() {
       );
       const data = {};
       tablas.forEach((tabla, i) => {
-        if (resultados[i].error) throw resultados[i].error;
-        data[tabla] = resultados[i].data || [];
+        if (resultados[i].error) {
+          console.warn(`Error cargando ${tabla}:`, resultados[i].error);
+          data[tabla] = [];
+        } else {
+          data[tabla] = resultados[i].data || [];
+        }
       });
       setCatalogos(data);
     } catch (error) {
       console.error('Error cargando catálogos:', error);
-      // Si hay error, dejamos arrays vacíos para que no falle la UI
+      // No lanzamos error para no romper la UI
     }
   }, []);
 
   const cargarInventario = useCallback(async () => {
-    if (!usuario) return;
+    // Si no hay usuario, no cargamos datos
+    if (!usuario) {
+      setCargando(false);
+      return;
+    }
+
     setCargando(true);
     setErrorConexion(false);
 
@@ -108,33 +117,31 @@ function App() {
       setComputadoras(compsFormateadas);
 
       // 2. Laboratorios
-      const { data: labs, error: labsError } = await supabase
-        .from('laboratorios')
-        .select('*')
-        .order('nombre');
-      if (labsError) throw labsError;
+      let labs = [];
+      try {
+        const { data, error } = await supabase.from('laboratorios').select('*').order('nombre');
+        if (!error) labs = data || [];
+      } catch (e) {
+        console.warn('Error cargando laboratorios:', e);
+      }
 
       // 3. Áreas
-      const { data: areas, error: areasError } = await supabase
-        .from('areas')
-        .select('*')
-        .order('nombre');
-      if (areasError) {
-        console.warn('Error cargando áreas:', areasError);
-        // Si no existe la tabla, usamos array vacío
+      let areas = [];
+      try {
+        const { data, error } = await supabase.from('areas').select('*').order('nombre');
+        if (!error) areas = data || [];
+      } catch (e) {
+        console.warn('Error cargando áreas:', e);
       }
-      const areasData = areas || [];
 
       // 4. Personas
-      const { data: personas, error: personasError } = await supabase
-        .from('personas')
-        .select('*')
-        .order('nombre');
-      if (personasError) {
-        console.warn('Error cargando personas:', personasError);
-        // Si no existe la tabla, usamos array vacío
+      let personas = [];
+      try {
+        const { data, error } = await supabase.from('personas').select('*').order('nombre');
+        if (!error) personas = data || [];
+      } catch (e) {
+        console.warn('Error cargando personas:', e);
       }
-      const personasData = personas || [];
 
       // 5. Estadísticas
       const total = comps.length;
@@ -143,30 +150,34 @@ function App() {
       const danados = comps.filter(c => c.estado === 'Dañado').length;
 
       // 6. Código automático
-      const { data: ultimo, error: ultimoError } = await supabase
-        .from('computadoras')
-        .select('codigo_inventario')
-        .order('id', { ascending: false })
-        .limit(1);
-      if (ultimoError) throw ultimoError;
-
-      let nuevoNumero = 1;
-      if (ultimo && ultimo.length > 0) {
-        const num = parseInt(ultimo[0].codigo_inventario.replace('INV-', ''));
-        nuevoNumero = num + 1;
+      let codigoAutomatico = 'INV-0001';
+      try {
+        const { data: ultimo, error: ultimoError } = await supabase
+          .from('computadoras')
+          .select('codigo_inventario')
+          .order('id', { ascending: false })
+          .limit(1);
+        if (!ultimoError && ultimo && ultimo.length > 0) {
+          const num = parseInt(ultimo[0].codigo_inventario.replace('INV-', ''));
+          const nuevoNumero = num + 1;
+          codigoAutomatico = `INV-${String(nuevoNumero).padStart(4, '0')}`;
+        }
+      } catch (e) {
+        console.warn('Error calculando código automático:', e);
       }
-      const codigoAutomatico = `INV-${String(nuevoNumero).padStart(4, '0')}`;
 
       setDashboardData({
         codigo_automatico: codigoAutomatico,
-        laboratorios: labs || [],
-        areas: areasData,
-        personas: personasData,
+        laboratorios: labs,
+        areas: areas,
+        personas: personas,
         estadisticas: { total, operativos, mantenimiento, danados }
       });
 
+      setErrorConexion(false);
+
     } catch (error) {
-      console.error('Error cargando inventario:', error);
+      console.error('Error en cargarInventario:', error);
       setErrorConexion(true);
     } finally {
       setCargando(false);
@@ -978,3 +989,4 @@ function App() {
 }
 
 export default App;
+        
