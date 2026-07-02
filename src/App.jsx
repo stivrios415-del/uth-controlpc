@@ -889,6 +889,10 @@ function App() {
             <i className={`bi ${navbarOpen ? 'bi-x-lg' : 'bi-list'}`}></i>
           </button>
 
+          {navbarOpen && (
+            <div className="mobile-menu-backdrop" onClick={() => setNavbarOpen(false)}></div>
+          )}
+
           <div className={`collapse navbar-collapse ${navbarOpen ? 'show' : ''}`} id="navbarNav">
             <div className="navbar-nav me-auto mb-2 mb-lg-0 d-flex flex-row gap-2 ms-0 ms-lg-4">
               <button
@@ -955,6 +959,51 @@ function App() {
         .app-navbar { background: linear-gradient(120deg, #065f46 0%, #10b981 100%); border-bottom: none; min-height: 60px; }
         .navbar-toggler { border-color: rgba(255,255,255,0.3); }
         .navbar-toggler:focus { box-shadow: none; }
+
+        .mobile-menu-backdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.5);
+          z-index: 1040;
+          animation: fadeIn 0.2s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        @media (max-width: 991.98px) {
+          .navbar-collapse {
+            position: fixed !important;
+            top: 0;
+            right: 0;
+            height: 100vh;
+            width: 280px;
+            max-width: 80vw;
+            background: linear-gradient(180deg, #065f46 0%, #10b981 100%);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 1050;
+            padding: 5.5rem 1.25rem 1.5rem;
+            overflow-y: auto;
+            display: flex !important;
+            flex-direction: column;
+            box-shadow: -8px 0 24px rgba(0,0,0,0.25);
+          }
+          .navbar-collapse.show {
+            transform: translateX(0);
+          }
+          .navbar-nav {
+            flex-direction: column !important;
+            width: 100%;
+            gap: 6px !important;
+          }
+          .nav-pill {
+            width: 100%;
+            text-align: left;
+            padding: 0.85rem 1rem !important;
+            font-size: 1rem !important;
+            border-radius: 10px !important;
+          }
+        }
+
         .nav-pill { color: rgba(255,255,255,0.75) !important; background: transparent; border: 1px solid transparent; font-size: 0.85rem; }
         .nav-pill:hover { background: rgba(255,255,255,0.12); color: #ffffff !important; }
         .nav-pill-active { background: #ffffff !important; color: #065f46 !important; }
@@ -989,4 +1038,3 @@ function App() {
 }
 
 export default App;
-        
