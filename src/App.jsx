@@ -186,6 +186,10 @@ function App() {
 
   useEffect(() => {
     cargarInventario();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usuario]);
+
+  useEffect(() => {
     cargarCatalogos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
