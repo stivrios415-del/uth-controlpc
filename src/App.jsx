@@ -760,18 +760,22 @@ function App() {
                     ))}
                   </select>
                 </div>
-                <div className="col-6 col-md-3">
-                  <label className="form-label text-secondary small fw-semibold">AÑO</label>
-                  <select name="ano" className="form-select app-input rounded-3 py-2" value={form.ano} onChange={handleInputChange}>
-                    <option value="">Seleccionar...</option>
-                    {(() => {
-                      const currentYear = new Date().getFullYear();
-                      const years = [];
-                      for (let y = 2000; y <= currentYear + 5; y++) years.push(y);
-                      return years.map(y => <option key={y} value={y}>{y}</option>);
-                    })()}
-                  </select>
-                </div>
+               <div className="col-6 col-md-3">
+  <label className="form-label text-secondary small fw-semibold">AÑO</label>
+  <input
+    type="month"
+    name="ano"
+    className="form-control app-input rounded-3 py-2"
+    value={form.ano ? `${form.ano}-01` : ''}
+    onChange={(e) => {
+      const valor = e.target.value; // formato "YYYY-MM"
+      const anioExtraido = valor ? valor.split('-')[0] : '';
+      setForm(prev => ({ ...prev, ano: anioExtraido }));
+    }}
+    min="2000-01"
+    max={`${new Date().getFullYear() + 5}-12`}
+  />
+</div>
                 <div className="col-6 col-md-3">
                   <label className="form-label text-secondary small fw-semibold">ESTADO</label>
                   <select name="estado" className="form-select app-input rounded-3 py-2" value={form.estado} onChange={handleInputChange}>
@@ -1030,7 +1034,7 @@ function App() {
                 className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'personas' ? 'nav-pill-active' : ''}`}
                 onClick={() => { setVistaActual('personas'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
               >
-                <i className="bi bi-people me-2"></i>Personas
+                <i className="bi bi-people me-2"></i>Personal de trabajo 
               </button>
             </div>
 
