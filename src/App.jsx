@@ -24,8 +24,7 @@ const INITIAL_FORM_STATE = {
   disco: '',
   ano: '',
   estado: 'Operativo',
-  laboratorio_id: '',
-  area_id: '',
+  ubicacion: '',
   persona_id: '',
   notas: ''
 };
@@ -211,6 +210,15 @@ function App() {
       if (!isNaN(num)) ramValue = num;
     }
 
+    // Interpreta la UBICACIÓN unificada ("lab-3" o "area-2") en la columna correcta
+    let laboratorioId = null;
+    let areaId = null;
+    if (form.ubicacion.startsWith('lab-')) {
+      laboratorioId = parseInt(form.ubicacion.replace('lab-', ''));
+    } else if (form.ubicacion.startsWith('area-')) {
+      areaId = parseInt(form.ubicacion.replace('area-', ''));
+    }
+
     const payload = {
       codigo_inventario: dashboardData.codigo_automatico,
       tipo: form.tipo || null,
@@ -221,8 +229,8 @@ function App() {
       disco: form.disco || null,
       ano: form.ano ? parseInt(form.ano) : null,
       estado: form.estado,
-      laboratorio_id: form.laboratorio_id ? parseInt(form.laboratorio_id) : null,
-      area_id: form.area_id ? parseInt(form.area_id) : null,
+      laboratorio_id: laboratorioId,
+      area_id: areaId,
       persona_id: form.persona_id ? parseInt(form.persona_id) : null,
       fecha_asignacion: form.persona_id ? new Date().toISOString() : null,
       notas: form.notas || null,
@@ -773,21 +781,19 @@ function App() {
                   </select>
                 </div>
                 <div className="col-12 col-md-6">
-                  <label className="form-label text-secondary small fw-semibold">LABORATORIO</label>
-                  <select name="laboratorio_id" className="form-select app-input rounded-3 py-2" value={form.laboratorio_id} onChange={handleInputChange}>
+                  <label className="form-label text-secondary small fw-semibold">UBICACIÓN</label>
+                  <select name="ubicacion" className="form-select app-input rounded-3 py-2" value={form.ubicacion} onChange={handleInputChange}>
                     <option value="">⚠️ -- Sin Asignar --</option>
-                    {dashboardData.laboratorios.map(lab => (
-                      <option key={lab.id} value={lab.id}>🏢 {lab.nombre} — {lab.edificio}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-12 col-md-6">
-                  <label className="form-label text-secondary small fw-semibold">ÁREA ADMINISTRATIVA</label>
-                  <select name="area_id" className="form-select app-input rounded-3 py-2" value={form.area_id} onChange={handleInputChange}>
-                    <option value="">⚠️ -- Sin Asignar --</option>
-                    {dashboardData.areas.map(area => (
-                      <option key={area.id} value={area.id}>🏢 {area.nombre}</option>
-                    ))}
+                    <optgroup label="🏢 Laboratorios">
+                      {dashboardData.laboratorios.map(lab => (
+                        <option key={`lab-${lab.id}`} value={`lab-${lab.id}`}>{lab.nombre} — {lab.edificio}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="🏛️ Áreas Administrativas">
+                      {dashboardData.areas.map(area => (
+                        <option key={`area-${area.id}`} value={`area-${area.id}`}>{area.nombre}</option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
                 <div className="col-12 col-md-6">
@@ -980,7 +986,7 @@ function App() {
             onClick={() => { setVistaActual('equipos'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
           >
             <img src={logo} alt="Logo UTH" style={{ height: '32px', width: 'auto', borderRadius: '8px', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }} />
-            <span className="text-white d-none d-sm-inline">UTH <span className="text-white-50 fw-light">|</span> CONTROL-PC</span>
+            <span className="text-white d-none d-sm-inline">UTH <span className="text-white-50 fw-light">|</span> MANTENIMIENTO</span>
             <span className="text-white d-inline d-sm-none">UTH-PC</span>
           </span>
 
