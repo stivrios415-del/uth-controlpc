@@ -3,6 +3,7 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import ExcelJS from 'exceljs';
 import Login from './Login';
 import Laboratorios from './Laboratorios';
 import Areas from './Areas';
@@ -301,49 +302,151 @@ function App() {
   }), [dashboardData.estadisticas]);
 
   // ==================== EXPORTACIONES ====================
-  const exportarExcel = () => {
+  const exportarExcel = async () => {
     if (computadorasFiltradas.length === 0) {
       alert('No hay datos para exportar.');
       return;
     }
 
-    let html = `<html><head><meta charset="UTF-8"></head><body>
-      <table border="1" style="border-collapse:collapse; font-family:Arial; font-size:12px;">
-        <tr style="background-color:#1a1a1a; color:white; font-weight:bold;">
-          <th>CÓDIGO</th><th>TIPO</th><th>MARCA</th><th>MODELO</th>
-          <th>PROCESADOR</th><th>RAM (GB)</th><th>DISCO</th><th>AÑO</th>
-          <th>ESTADO</th><th>LABORATORIO</th><th>ÁREA</th><th>ASIGNADO A</th><th>FECHA ASIGNACIÓN</th><th>NOTAS</th>
-        </tr>`;
+    // Filtra por el laboratorio elegido en "Reportes" (o todos)
+    const equipos = filtroReporte !== 'todos'
+      ? computadorasFiltradas.filter(c => c.laboratorio_id === parseInt(filtroReporte))
+      : computadorasFiltradas;
 
-    computadorasFiltradas.forEach(comp => {
-      const areaNombre = dashboardData.areas?.find(a => a.id === comp.area_id)?.nombre || '';
-      const personaNombre = dashboardData.personas?.find(p => p.id === comp.persona_id)?.nombre || '';
-      const fechaAsig = comp.fecha_asignacion ? new Date(comp.fecha_asignacion).toLocaleDateString('es-HN') : '';
-      html += `<tr>
-        <td>${comp.codigo_inventario}</td>
-        <td>${comp.tipo || ''}</td>
-        <td>${comp.marca || ''}</td>
-        <td>${comp.modelo || ''}</td>
-        <td>${comp.procesador || ''}</td>
-        <td>${comp.ram_gb || ''}</td>
-        <td>${comp.disco || ''}</td>
-        <td>${comp.ano || ''}</td>
-        <td>${comp.estado}</td>
-        <td>${comp.nombre_laboratorio || 'SIN ASIGNAR'}</td>
-        <td>${areaNombre}</td>
-        <td>${personaNombre}</td>
-        <td>${fechaAsig}</td>
-        <td>${comp.notas || ''}</td>
-      </tr>`;
+    if (equipos.length === 0) {
+      alert('No hay equipos para ese laboratorio.');
+      return;
+    }
+
+    const ubicacionNombre = filtroReporte !== 'todos'
+      ? (dashboardData.laboratorios.find(l => l.id === parseInt(filtroReporte))?.nombre || '')
+      : '';
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Inventario');
+
+    sheet.columns = [
+      { width: 6 },   // A: Nº
+      { width: 12 },  // B: Tipo
+      { width: 14 },  // C: Marca
+      { width: 16 },  // D: Modelo
+      { width: 18 },  // E: Serie
+      { width: 16 },  // F: Procesador
+      { width: 10 },  // G: RAM
+      { width: 12 },  // H: DISCO
+      { width: 10 },  // I: Año CPU
+    ];
+
+    const bordeFino = {
+      top: { style: 'thin' }, left: { style: 'thin' },
+      bottom: { style: 'thin' }, right: { style: 'thin' }
+    };
+
+    // ---- Título ----
+    sheet.mergeCells('A1:I1');
+    const tituloCell = sheet.getCell('A1');
+    tituloCell.value = 'CONTROL DE INVENTARIO COMPUTADORAS';
+    tituloCell.font = { bold: true, size: 14 };
+    tituloCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getRow(1).height = 26;
+
+    // ---- Ubicación ----
+    sheet.mergeCells('A2:I2');
+    const ubicacionCell = sheet.getCell('A2');
+    ubicacionCell.value = `UBICACIÓN: ${ubicacionNombre}`;
+    ubicacionCell.font = { bold: true, size: 11 };
+    ubicacionCell.alignment = { horizontal: 'left', vertical: 'middle' };
+    sheet.getRow(2).height = 20;
+
+    // ---- Encabezados combinados (filas 3 y 4) ----
+    sheet.mergeCells('A3:A4'); // Nº
+    sheet.mergeCells('B3:E3'); // Descripción
+    sheet.mergeCells('F3:H3'); // Especificaciones CPU
+    sheet.mergeCells('I3:I4'); // Año CPU
+
+    sheet.getCell('A3').value = 'Nº';
+    sheet.getCell('B3').value = 'Descripción';
+    sheet.getCell('F3').value = 'Especificaciones CPU';
+    sheet.getCell('I3').value = 'Año CPU';
+
+    sheet.getCell('B4').value = 'Tipo';
+    sheet.getCell('C4').value = 'Marca';
+    sheet.getCell('D4').value = 'Modelo';
+    sheet.getCell('E4').value = 'Serie';
+    sheet.getCell('F4').value = 'Procesador';
+    sheet.getCell('G4').value = 'RAM';
+    sheet.getCell('H4').value = 'DISCO';
+
+    ['A3', 'B3', 'F3', 'I3', 'B4', 'C4', 'D4', 'E4', 'F4', 'G4', 'H4'].forEach(ref => {
+      const cell = sheet.getCell(ref);
+      cell.font = { bold: true, size: 10 };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE9F9F1' } };
+      cell.border = bordeFino;
+    });
+    sheet.getRow(3).height = 18;
+    sheet.getRow(4).height = 18;
+
+    // ---- Agrupar equipos: cada CPU abre un ítem nuevo, lo que sigue (ej. MONITOR) se agrupa con él ----
+    const grupos = [];
+    equipos.forEach(equipo => {
+      const tipoUpper = (equipo.tipo || '').toUpperCase();
+      const esInicioDeGrupo = tipoUpper.includes('CPU') || tipoUpper.includes('LAPTOP') || tipoUpper.includes('DESKTOP') || grupos.length === 0;
+      if (esInicioDeGrupo) {
+        grupos.push([equipo]);
+      } else {
+        grupos[grupos.length - 1].push(equipo);
+      }
     });
 
-    html += '</table></body></html>';
+    let filaActual = 5;
+    grupos.forEach((grupo, idx) => {
+      const filaInicio = filaActual;
 
-    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+      grupo.forEach(equipo => {
+        const row = sheet.getRow(filaActual);
+        row.getCell(2).value = (equipo.tipo || '').toUpperCase();
+        row.getCell(3).value = equipo.marca || '';
+        row.getCell(4).value = equipo.modelo || '';
+        row.getCell(5).value = equipo.numero_serie || ''; // Campo "Serie" aún no existe en la BD
+        row.getCell(6).value = equipo.procesador || '';
+        row.getCell(7).value = equipo.ram_gb ? `${equipo.ram_gb}GB` : '';
+        row.getCell(8).value = equipo.disco || '';
+        row.getCell(9).value = equipo.ano || '';
+
+        for (let col = 1; col <= 9; col++) {
+          const cell = row.getCell(col);
+          cell.border = bordeFino;
+          cell.font = { size: 10 };
+          cell.alignment = { vertical: 'middle', horizontal: col === 1 ? 'center' : 'left' };
+        }
+        filaActual++;
+      });
+
+      const filaFin = filaActual - 1;
+
+      // Combina el número de ítem verticalmente
+      if (filaFin > filaInicio) {
+        sheet.mergeCells(`A${filaInicio}:A${filaFin}`);
+      }
+      const celdaNum = sheet.getCell(`A${filaInicio}`);
+      celdaNum.value = idx + 1;
+      celdaNum.font = { bold: true, size: 10 };
+      celdaNum.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      // Combina la marca verticalmente solo si es la misma en todo el grupo
+      const marcasUnicas = [...new Set(grupo.map(e => e.marca || ''))];
+      if (filaFin > filaInicio && marcasUnicas.length === 1) {
+        sheet.mergeCells(`C${filaInicio}:C${filaFin}`);
+      }
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Inventario_UTH_${new Date().toISOString().slice(0,10)}.xls`;
+    link.download = `Inventario_UTH_${new Date().toISOString().slice(0, 10)}.xlsx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
