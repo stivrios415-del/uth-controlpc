@@ -986,8 +986,8 @@ function App() {
             onClick={() => { setVistaActual('equipos'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
           >
             <img src={logo} alt="Logo UTH" style={{ height: '32px', width: 'auto', borderRadius: '8px', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }} />
-            <span className="text-white d-none d-sm-inline">UTH <span className="text-white-50 fw-light">|</span> MANTENIMIENTO</span>
-            <span className="text-white d-inline d-sm-none">UTH-PC</span>
+            <span className="text-white d-none d-sm-inline">UTH <span className="text-white-50 fw-light">|</span> TIC</span>
+            <span className="text-white d-inline d-sm-none">UTH-TIC</span>
           </span>
 
           <button
