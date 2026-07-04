@@ -8,6 +8,7 @@ import Login from './Login';
 import Laboratorios from './Laboratorios';
 import Areas from './Areas';
 import Personas from './Personas';
+import Extras from './Extras';
 import HistorialPC from './historial';
 import EditarEquipo from './EditarEquipo';
 import { supabase } from './supabaseClient';
@@ -19,7 +20,6 @@ const INITIAL_FORM_STATE = {
   tipo: '',
   marca: '',
   modelo: '',
-  numero_serie: '',
   procesador: '',
   ram_gb: '',
   disco: '',
@@ -64,9 +64,6 @@ function App() {
     ram_opciones: [],
     discos: [],
   });
-
-  // Detecta si el tipo seleccionado es Monitor, para mostrar solo Marca/Modelo/Serie
-  const esMonitor = form.tipo.toLowerCase().includes('monitor');
 
   // ==================== FUNCIONES ====================
   const cargarCatalogos = useCallback(async () => {
@@ -200,7 +197,12 @@ function App() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
+    if (name === 'ubicacion' && !value.startsWith('area-')) {
+      // Si la ubicación no es un Área Administrativa, no se puede asignar a ninguna persona
+      setForm(prev => ({ ...prev, ubicacion: value, persona_id: '' }));
+    } else {
+      setForm(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const guardarEquipo = async (e) => {
@@ -228,18 +230,16 @@ function App() {
       tipo: form.tipo || null,
       marca: form.marca || null,
       modelo: form.modelo || null,
-      numero_serie: form.numero_serie || null,
-      // Los CPU/Laptop llevan procesador, RAM, disco y año.
-      // Los Monitores solo llevan marca, modelo y serie.
-      procesador: esMonitor ? null : (form.procesador || null),
-      ram_gb: esMonitor ? null : ramValue,
-      disco: esMonitor ? null : (form.disco || null),
-      ano: esMonitor ? null : (form.ano ? parseInt(form.ano) : null),
+      procesador: form.procesador || null,
+      ram_gb: ramValue,
+      disco: form.disco || null,
+      ano: form.ano ? parseInt(form.ano) : null,
       estado: form.estado,
       laboratorio_id: laboratorioId,
       area_id: areaId,
-      persona_id: form.persona_id ? parseInt(form.persona_id) : null,
-      fecha_asignacion: form.persona_id ? new Date().toISOString() : null,
+      // Solo se puede asignar a una persona si la ubicación es un Área Administrativa
+      persona_id: (areaId && form.persona_id) ? parseInt(form.persona_id) : null,
+      fecha_asignacion: (areaId && form.persona_id) ? new Date().toISOString() : null,
       notas: form.notas || null,
     };
 
@@ -423,7 +423,7 @@ function App() {
         row.getCell(2).value = (equipo.tipo || '').toUpperCase();
         row.getCell(3).value = equipo.marca || '';
         row.getCell(4).value = equipo.modelo || '';
-        row.getCell(5).value = equipo.numero_serie || '';
+        row.getCell(5).value = equipo.numero_serie || ''; // Campo "Serie" aún no existe en la BD
         row.getCell(6).value = equipo.procesador || '';
         row.getCell(7).value = equipo.ram_gb ? `${equipo.ram_gb}GB` : '';
         row.getCell(8).value = equipo.disco || '';
@@ -483,7 +483,7 @@ function App() {
     doc.text(`Fecha: ${new Date().toLocaleDateString()}`, pageWidth / 2, 22, { align: 'center' });
     doc.text(`Total de equipos: ${computadorasFiltradas.length}`, pageWidth / 2, 28, { align: 'center' });
 
-    const headers = [['Código', 'Tipo', 'Marca', 'Modelo', 'Serie', 'Procesador', 'RAM (GB)', 'Disco', 'Año', 'Estado', 'Laboratorio', 'Área', 'Asignado a', 'Fecha Asignación']];
+    const headers = [['Código', 'Tipo', 'Marca', 'Modelo', 'Procesador', 'RAM (GB)', 'Disco', 'Año', 'Estado', 'Laboratorio', 'Área', 'Asignado a', 'Fecha Asignación']];
     const rows = computadorasFiltradas.map(comp => {
       const areaNombre = dashboardData.areas?.find(a => a.id === comp.area_id)?.nombre || '';
       const personaNombre = dashboardData.personas?.find(p => p.id === comp.persona_id)?.nombre || '';
@@ -493,7 +493,6 @@ function App() {
         comp.tipo || '',
         comp.marca || '',
         comp.modelo || '',
-        comp.numero_serie || '',
         comp.procesador || '',
         comp.ram_gb || '',
         comp.disco || '',
@@ -513,20 +512,19 @@ function App() {
       styles: { fontSize: 8, cellPadding: 1.5 },
       headStyles: { fillColor: [6, 95, 70], textColor: [255, 255, 255], fontSize: 9 },
       columnStyles: {
-        0: { cellWidth: 16 },
-        1: { cellWidth: 14 },
-        2: { cellWidth: 16 },
-        3: { cellWidth: 16 },
-        4: { cellWidth: 18 },
-        5: { cellWidth: 20 },
-        6: { cellWidth: 12 },
-        7: { cellWidth: 16 },
-        8: { cellWidth: 12 },
-        9: { cellWidth: 16 },
-        10: { cellWidth: 16 },
-        11: { cellWidth: 18 },
-        12: { cellWidth: 16 },
-        13: { cellWidth: 16 },
+        0: { cellWidth: 18 },
+        1: { cellWidth: 16 },
+        2: { cellWidth: 20 },
+        3: { cellWidth: 20 },
+        4: { cellWidth: 22 },
+        5: { cellWidth: 14 },
+        6: { cellWidth: 20 },
+        7: { cellWidth: 14 },
+        8: { cellWidth: 18 },
+        9: { cellWidth: 20 },
+        10: { cellWidth: 20 },
+        11: { cellWidth: 22 },
+        12: { cellWidth: 20 },
       },
       margin: { left: 10, right: 10 },
       didDrawPage: function () {
@@ -584,7 +582,6 @@ function App() {
                 <th className="pb-2 border-0">TIPO</th>
                 <th className="pb-2 border-0">MARCA</th>
                 <th className="pb-2 border-0 d-none d-md-table-cell">MODELO</th>
-                <th className="pb-2 border-0 d-none d-md-table-cell">SERIE</th>
                 <th className="pb-2 border-0">ESTADO</th>
                 <th className="pb-2 border-0 d-none d-lg-table-cell">LABORATORIO</th>
                 <th className="pb-2 border-0 d-none d-lg-table-cell">ÁREA</th>
@@ -595,7 +592,7 @@ function App() {
             <tbody>
               {equiposMostrar.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="text-center py-4 text-muted small bg-light rounded-4">
+                  <td colSpan="9" className="text-center py-4 text-muted small bg-light rounded-4">
                     <i className="bi bi-folder-x d-block fs-3 mb-2 text-secondary"></i>
                     No hay equipos que coincidan.
                   </td>
@@ -613,7 +610,6 @@ function App() {
                       <td className="border-0"><span className="fw-semibold">{comp.tipo || '—'}</span></td>
                       <td className="border-0">{comp.marca || '—'}</td>
                       <td className="border-0 d-none d-md-table-cell">{comp.modelo || '—'}</td>
-                      <td className="border-0 d-none d-md-table-cell" style={{ fontSize: '11px' }}>{comp.numero_serie || '—'}</td>
                       <td className="border-0">
                         <span className={`badge ${comp.estado === 'Operativo' ? 'bg-success-subtle text-success border border-success' : comp.estado === 'Mantenimiento' ? 'bg-warning-subtle text-warning-emphasis border border-warning' : 'bg-danger-subtle text-danger border border-danger'} px-2 py-1 rounded-3 fw-semibold`} style={{ fontSize: '9px' }}>
                           {comp.estado === 'Operativo' && '🟢'} {comp.estado === 'Mantenimiento' && '🟡'} {comp.estado === 'Dañado' && '🔴'} {comp.estado}
@@ -744,69 +740,45 @@ function App() {
                     ))}
                   </select>
                 </div>
-
-                {/* SERIE: siempre visible, para CPU/Laptop y Monitor */}
-                <div className={esMonitor ? 'col-12' : 'col-12 col-md-4'}>
-                  <label className="form-label text-secondary small fw-semibold">SERIE</label>
-                  <input
-                    type="text"
-                    name="numero_serie"
-                    className="form-control app-input rounded-3 py-2"
-                    value={form.numero_serie}
-                    onChange={handleInputChange}
-                    placeholder="Número de serie del equipo"
-                  />
+                <div className="col-12 col-md-4">
+                  <label className="form-label text-secondary small fw-semibold">PROCESADOR</label>
+                  <select name="procesador" className="form-select app-input rounded-3 py-2" value={form.procesador} onChange={handleInputChange}>
+                    <option value="">Seleccionar...</option>
+                    {catalogos.procesadores.map(item => (
+                      <option key={item.id} value={item.nombre}>{item.nombre}</option>
+                    ))}
+                  </select>
                 </div>
-
-                {/* Campos exclusivos de CPU/Laptop/Desktop: se ocultan si el tipo es Monitor */}
-                {!esMonitor && (
-                  <>
-                    <div className="col-12 col-md-4">
-                      <label className="form-label text-secondary small fw-semibold">PROCESADOR</label>
-                      <select name="procesador" className="form-select app-input rounded-3 py-2" value={form.procesador} onChange={handleInputChange}>
-                        <option value="">Seleccionar...</option>
-                        {catalogos.procesadores.map(item => (
-                          <option key={item.id} value={item.nombre}>{item.nombre}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="col-6 col-md-3">
-                      <label className="form-label text-secondary small fw-semibold">RAM (GB)</label>
-                      <select name="ram_gb" className="form-select app-input rounded-3 py-2" value={form.ram_gb} onChange={handleInputChange}>
-                        <option value="">Seleccionar...</option>
-                        {catalogos.ram_opciones.map(item => (
-                          <option key={item.id} value={item.nombre.replace('GB', '')}>{item.nombre}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="col-6 col-md-3">
-                      <label className="form-label text-secondary small fw-semibold">DISCO</label>
-                      <select name="disco" className="form-select app-input rounded-3 py-2" value={form.disco} onChange={handleInputChange}>
-                        <option value="">Seleccionar...</option>
-                        {catalogos.discos.map(item => (
-                          <option key={item.id} value={item.nombre}>{item.nombre}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="col-6 col-md-3">
-                      <label className="form-label text-secondary small fw-semibold">AÑO</label>
-                      <input
-                        type="month"
-                        name="ano"
-                        className="form-control app-input rounded-3 py-2"
-                        value={form.ano ? `${form.ano}-01` : ''}
-                        onChange={(e) => {
-                          const valor = e.target.value; // formato "YYYY-MM"
-                          const anioExtraido = valor ? valor.split('-')[0] : '';
-                          setForm(prev => ({ ...prev, ano: anioExtraido }));
-                        }}
-                        min="2000-01"
-                        max={`${new Date().getFullYear() + 5}-12`}
-                      />
-                    </div>
-                  </>
-                )}
-
+                <div className="col-6 col-md-3">
+                  <label className="form-label text-secondary small fw-semibold">RAM (GB)</label>
+                  <select name="ram_gb" className="form-select app-input rounded-3 py-2" value={form.ram_gb} onChange={handleInputChange}>
+                    <option value="">Seleccionar...</option>
+                    {catalogos.ram_opciones.map(item => (
+                      <option key={item.id} value={item.nombre.replace('GB', '')}>{item.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-6 col-md-3">
+                  <label className="form-label text-secondary small fw-semibold">DISCO</label>
+                  <select name="disco" className="form-select app-input rounded-3 py-2" value={form.disco} onChange={handleInputChange}>
+                    <option value="">Seleccionar...</option>
+                    {catalogos.discos.map(item => (
+                      <option key={item.id} value={item.nombre}>{item.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-6 col-md-3">
+                  <label className="form-label text-secondary small fw-semibold">AÑO</label>
+                  <select name="ano" className="form-select app-input rounded-3 py-2" value={form.ano} onChange={handleInputChange}>
+                    <option value="">Seleccionar...</option>
+                    {(() => {
+                      const currentYear = new Date().getFullYear();
+                      const years = [];
+                      for (let y = 2000; y <= currentYear + 5; y++) years.push(y);
+                      return years.map(y => <option key={y} value={y}>{y}</option>);
+                    })()}
+                  </select>
+                </div>
                 <div className="col-6 col-md-3">
                   <label className="form-label text-secondary small fw-semibold">ESTADO</label>
                   <select name="estado" className="form-select app-input rounded-3 py-2" value={form.estado} onChange={handleInputChange}>
@@ -831,16 +803,26 @@ function App() {
                     </optgroup>
                   </select>
                 </div>
-                <div className="col-12 col-md-6">
-                  <label className="form-label text-secondary small fw-semibold">ASIGNAR A</label>
-                  <select name="persona_id" className="form-select app-input rounded-3 py-2" value={form.persona_id} onChange={handleInputChange}>
-                    <option value="">⚠️ -- Sin Asignar --</option>
-                    {dashboardData.personas.map(persona => (
-                      <option key={persona.id} value={persona.id}>👤 {persona.nombre}</option>
-                    ))}
-                  </select>
-                  <small className="text-muted d-block mt-1">Al seleccionar, se registrará la fecha actual.</small>
-                </div>
+                {form.ubicacion.startsWith('area-') && (
+                  <div className="col-12 col-md-6">
+                    <label className="form-label text-secondary small fw-semibold">ASIGNAR A</label>
+                    <select name="persona_id" className="form-select app-input rounded-3 py-2" value={form.persona_id} onChange={handleInputChange}>
+                      <option value="">⚠️ -- Sin Asignar --</option>
+                      {dashboardData.personas.map(persona => (
+                        <option key={persona.id} value={persona.id}>👤 {persona.nombre}</option>
+                      ))}
+                    </select>
+                    <small className="text-muted d-block mt-1">Al seleccionar, se registrará la fecha actual.</small>
+                  </div>
+                )}
+                {form.ubicacion.startsWith('lab-') && (
+                  <div className="col-12 col-md-6 d-flex align-items-end">
+                    <small className="text-muted">
+                      <i className="bi bi-info-circle me-1"></i>
+                      Los equipos de laboratorio no se asignan a una persona específica.
+                    </small>
+                  </div>
+                )}
                 <div className="col-12">
                   <label className="form-label text-secondary small fw-semibold">OBSERVACIONES</label>
                   <textarea name="notas" className="form-control app-input rounded-3" rows="2" value={form.notas} onChange={handleInputChange} placeholder="Detalles adicionales..."></textarea>
@@ -970,6 +952,9 @@ function App() {
           </>
         );
 
+      case 'extras':
+        return <Extras />;
+
       case 'equipos':
       default:
         return renderEquipos();
@@ -1021,8 +1006,8 @@ function App() {
             onClick={() => { setVistaActual('equipos'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
           >
             <img src={logo} alt="Logo UTH" style={{ height: '32px', width: 'auto', borderRadius: '8px', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }} />
-            <span className="text-white d-none d-sm-inline">UTH <span className="text-white-50 fw-light">|</span> TIC</span>
-            <span className="text-white d-inline d-sm-none">UTH-TIC</span>
+            <span className="text-white d-none d-sm-inline">UTH <span className="text-white-50 fw-light">|</span> CONTROL-PC</span>
+            <span className="text-white d-inline d-sm-none">UTH-PC</span>
           </span>
 
           <button
@@ -1065,7 +1050,13 @@ function App() {
                 className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'personas' ? 'nav-pill-active' : ''}`}
                 onClick={() => { setVistaActual('personas'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
               >
-                <i className="bi bi-people me-2"></i>Personal de trabajo 
+                <i className="bi bi-people me-2"></i>Personas
+              </button>
+              <button
+                className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'extras' ? 'nav-pill-active' : ''}`}
+                onClick={() => { setVistaActual('extras'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
+              >
+                <i className="bi bi-box-seam me-2"></i>Extras
               </button>
             </div>
 
