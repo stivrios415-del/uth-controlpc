@@ -751,7 +751,7 @@ function App() {
                     ))}
                   </select>
                 </div>
-                <div className="col-12 col-md-4">
+                <div className={esMonitor ? 'col-12' : 'col-12 col-md-4'}>
                   <label className="form-label text-secondary small fw-semibold">SERIE</label>
                   <input
                     type="text"
@@ -762,49 +762,53 @@ function App() {
                     placeholder="Número de serie del equipo"
                   />
                 </div>
-                <div className="col-12 col-md-4">
-                  <label className="form-label text-secondary small fw-semibold">PROCESADOR</label>
-                  <select name="procesador" className="form-select app-input rounded-3 py-2" value={form.procesador} onChange={handleInputChange}>
-                    <option value="">Seleccionar...</option>
-                    {catalogos.procesadores.map(item => (
-                      <option key={item.id} value={item.nombre}>{item.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-6 col-md-3">
-                  <label className="form-label text-secondary small fw-semibold">RAM (GB)</label>
-                  <select name="ram_gb" className="form-select app-input rounded-3 py-2" value={form.ram_gb} onChange={handleInputChange}>
-                    <option value="">Seleccionar...</option>
-                    {catalogos.ram_opciones.map(item => (
-                      <option key={item.id} value={item.nombre.replace('GB', '')}>{item.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-6 col-md-3">
-                  <label className="form-label text-secondary small fw-semibold">DISCO</label>
-                  <select name="disco" className="form-select app-input rounded-3 py-2" value={form.disco} onChange={handleInputChange}>
-                    <option value="">Seleccionar...</option>
-                    {catalogos.discos.map(item => (
-                      <option key={item.id} value={item.nombre}>{item.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-6 col-md-3">
-                  <label className="form-label text-secondary small fw-semibold">AÑO</label>
-                  <input
-                    type="month"
-                    name="ano"
-                    className="form-control app-input rounded-3 py-2"
-                    value={form.ano ? `${form.ano}-01` : ''}
-                    onChange={(e) => {
-                      const valor = e.target.value; // formato "YYYY-MM"
-                      const anioExtraido = valor ? valor.split('-')[0] : '';
-                      setForm(prev => ({ ...prev, ano: anioExtraido }));
-                    }}
-                    min="2000-01"
-                    max={`${new Date().getFullYear() + 5}-12`}
-                  />
-                </div>
+                {!esMonitor && (
+                  <>
+                    <div className="col-12 col-md-4">
+                      <label className="form-label text-secondary small fw-semibold">PROCESADOR</label>
+                      <select name="procesador" className="form-select app-input rounded-3 py-2" value={form.procesador} onChange={handleInputChange}>
+                        <option value="">Seleccionar...</option>
+                        {catalogos.procesadores.map(item => (
+                          <option key={item.id} value={item.nombre}>{item.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-6 col-md-3">
+                      <label className="form-label text-secondary small fw-semibold">RAM (GB)</label>
+                      <select name="ram_gb" className="form-select app-input rounded-3 py-2" value={form.ram_gb} onChange={handleInputChange}>
+                        <option value="">Seleccionar...</option>
+                        {catalogos.ram_opciones.map(item => (
+                          <option key={item.id} value={item.nombre.replace('GB', '')}>{item.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-6 col-md-3">
+                      <label className="form-label text-secondary small fw-semibold">DISCO</label>
+                      <select name="disco" className="form-select app-input rounded-3 py-2" value={form.disco} onChange={handleInputChange}>
+                        <option value="">Seleccionar...</option>
+                        {catalogos.discos.map(item => (
+                          <option key={item.id} value={item.nombre}>{item.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-6 col-md-3">
+                      <label className="form-label text-secondary small fw-semibold">AÑO</label>
+                      <input
+                        type="month"
+                        name="ano"
+                        className="form-control app-input rounded-3 py-2"
+                        value={form.ano ? `${form.ano}-01` : ''}
+                        onChange={(e) => {
+                          const valor = e.target.value; // formato "YYYY-MM"
+                          const anioExtraido = valor ? valor.split('-')[0] : '';
+                          setForm(prev => ({ ...prev, ano: anioExtraido }));
+                        }}
+                        min="2000-01"
+                        max={`${new Date().getFullYear() + 5}-12`}
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div className="col-6 col-md-3">
                   <label className="form-label text-secondary small fw-semibold">ESTADO</label>
