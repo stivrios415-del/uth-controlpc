@@ -9,6 +9,7 @@ import Laboratorios from './Laboratorios';
 import Areas from './Areas';
 import Personas from './Personas';
 import Extras from './Extras';
+import Catalogos from './Catalogos';
 import HistorialPC from './historial';
 import EditarEquipo from './EditarEquipo';
 import { supabase } from './supabaseClient';
@@ -760,7 +761,9 @@ function App() {
                     value={form.numero_serie}
                     onChange={handleInputChange}
                     placeholder="Número de serie del equipo"
+                    maxLength={50}
                   />
+                  <small className="text-muted d-block mt-1">{form.numero_serie.length}/50</small>
                 </div>
                 {!esMonitor && (
                   <>
@@ -858,7 +861,8 @@ function App() {
 
                 <div className="col-12">
                   <label className="form-label text-secondary small fw-semibold">OBSERVACIONES</label>
-                  <textarea name="notas" className="form-control app-input rounded-3" rows="2" value={form.notas} onChange={handleInputChange} placeholder="Detalles adicionales..."></textarea>
+                  <textarea name="notas" className="form-control app-input rounded-3" rows="2" value={form.notas} onChange={handleInputChange} placeholder="Detalles adicionales..." maxLength={50}></textarea>
+                  <small className="text-muted d-block mt-1">{form.notas.length}/50</small>
                 </div>
               </div>
               <button type="submit" className="btn-brand mt-3 mt-md-4 w-100 py-2" disabled={submitting}>
@@ -988,6 +992,9 @@ function App() {
       case 'extras':
         return <Extras />;
 
+      case 'catalogos':
+        return <Catalogos onCatalogoChange={cargarCatalogos} />;
+
       case 'equipos':
       default:
         return renderEquipos();
@@ -1091,6 +1098,14 @@ function App() {
               >
                 <i className="bi bi-box-seam me-2"></i>Extras
               </button>
+              {usuario.rol === 'admin' && (
+                <button
+                  className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'catalogos' ? 'nav-pill-active' : ''}`}
+                  onClick={() => { setVistaActual('catalogos'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
+                >
+                  <i className="bi bi-sliders me-2"></i>Catálogos
+                </button>
+              )}
             </div>
 
             <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-3 mt-3 mt-lg-0">
