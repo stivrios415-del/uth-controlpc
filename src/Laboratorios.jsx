@@ -84,10 +84,24 @@ function Laboratorios({ onLaboratorioChange }) {
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
+  // ==================== VALIDACIÓN DEL FORMULARIO ====================
+  const validarLaboratorio = () => {
+    const faltantes = [];
+    if (!form.nombre.trim()) faltantes.push('NOMBRE');
+    if (!form.edificio.trim()) faltantes.push('EDIFICIO');
+    return faltantes;
+  };
+
   const guardarLaboratorio = async (e) => {
     e.preventDefault();
-    if (!form.nombre.trim() || !form.edificio.trim()) {
-      setMensaje({ tipo: 'danger', texto: 'Todos los campos son obligatorios.' });
+
+    const camposFaltantes = validarLaboratorio();
+    if (camposFaltantes.length > 0) {
+      alert(
+        '⚠️ Faltan campos por completar:\n\n' +
+        camposFaltantes.map(c => `• ${c}`).join('\n') +
+        '\n\nPor favor llena todos los campos antes de guardar el laboratorio.'
+      );
       return;
     }
 
@@ -117,7 +131,7 @@ function Laboratorios({ onLaboratorioChange }) {
       }, 1500);
 
     } catch (err) {
-      setMensaje({ tipo: 'danger', texto: 'Error al guardar: ' + err.message });
+      alert('Error al guardar: ' + err.message);
       setEnviando(false);
     }
   };
@@ -185,7 +199,11 @@ function Laboratorios({ onLaboratorioChange }) {
             </h5>
             <p className="text-muted small m-0">Total: {laboratorios.length} laboratorios registrados</p>
           </div>
-          <button onClick={abrirNuevo} className="btn btn-success px-4 py-2 fw-semibold">
+          <button
+            onClick={abrirNuevo}
+            className="btn btn-success px-4 py-2 fw-semibold"
+            title="Registrar un nuevo laboratorio en el sistema"
+          >
             <i className="bi bi-plus-lg me-2"></i>Nuevo Laboratorio
           </button>
         </div>
@@ -227,6 +245,7 @@ function Laboratorios({ onLaboratorioChange }) {
                           onClick={() => handleSeleccionarLaboratorio(lab)}
                           className="btn btn-sm btn-info text-white rounded-pill px-3"
                           style={{ fontSize: '12px' }}
+                          title={isSelected ? 'Ocultar los equipos de este laboratorio' : 'Ver los equipos asignados a este laboratorio'}
                         >
                           {isSelected ? '👀 Ver' : '📋 Ver'}
                         </button>
@@ -235,14 +254,14 @@ function Laboratorios({ onLaboratorioChange }) {
                         <button
                           onClick={(e) => { e.stopPropagation(); abrirEditar(lab); }}
                           className="btn btn-sm btn-link text-warning p-1 me-2"
-                          title="Editar"
+                          title="Editar este laboratorio"
                         >
                           <i className="bi bi-pencil fs-5"></i>
                         </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); eliminarLaboratorio(lab.id); }}
                           className="btn btn-sm btn-link text-danger p-1"
-                          title="Eliminar"
+                          title="Eliminar este laboratorio (desasigna sus equipos)"
                         >
                           <i className="bi bi-trash3 fs-5"></i>
                         </button>
@@ -307,7 +326,12 @@ function Laboratorios({ onLaboratorioChange }) {
                 <i className="bi bi-building text-success me-2"></i>
                 {modoEdicion ? 'Editar Laboratorio' : 'Nuevo Laboratorio'}
               </h6>
-              <button type="button" className="btn-close shadow-none" onClick={cerrarModal}></button>
+              <button
+                type="button"
+                className="btn-close shadow-none"
+                onClick={cerrarModal}
+                title="Cerrar sin guardar"
+              ></button>
             </div>
 
             <form onSubmit={guardarLaboratorio} className="p-4">
@@ -351,6 +375,7 @@ function Laboratorios({ onLaboratorioChange }) {
                 className="btn btn-success w-100 py-2 fw-semibold"
                 disabled={enviando}
                 style={{ backgroundColor: '#28a745', border: 'none' }}
+                title="Guardar los datos de este laboratorio"
               >
                 {enviando ? (
                   <>
