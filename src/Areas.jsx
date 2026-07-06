@@ -84,10 +84,24 @@ function Areas({ onAreaChange }) {
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
+  // ==================== VALIDACIÓN DEL FORMULARIO ====================
+  // La descripción es opcional a propósito; solo el nombre es obligatorio.
+  const validarArea = () => {
+    const faltantes = [];
+    if (!form.nombre.trim()) faltantes.push('NOMBRE');
+    return faltantes;
+  };
+
   const guardarArea = async (e) => {
     e.preventDefault();
-    if (!form.nombre.trim()) {
-      setMensaje({ tipo: 'danger', texto: 'El nombre es obligatorio.' });
+
+    const camposFaltantes = validarArea();
+    if (camposFaltantes.length > 0) {
+      alert(
+        '⚠️ Faltan campos por completar:\n\n' +
+        camposFaltantes.map(c => `• ${c}`).join('\n') +
+        '\n\nPor favor llena todos los campos obligatorios antes de guardar el área.'
+      );
       return;
     }
 
@@ -117,7 +131,7 @@ function Areas({ onAreaChange }) {
       }, 1500);
 
     } catch (err) {
-      setMensaje({ tipo: 'danger', texto: 'Error al guardar: ' + err.message });
+      alert('Error al guardar: ' + err.message);
       setEnviando(false);
     }
   };
@@ -185,7 +199,11 @@ function Areas({ onAreaChange }) {
             </h5>
             <p className="text-muted small m-0">Total: {areas.length} áreas registradas</p>
           </div>
-          <button onClick={abrirNuevo} className="btn btn-success px-4 py-2 fw-semibold">
+          <button
+            onClick={abrirNuevo}
+            className="btn btn-success px-4 py-2 fw-semibold"
+            title="Registrar una nueva área administrativa"
+          >
             <i className="bi bi-plus-lg me-2"></i>Nueva Área
           </button>
         </div>
@@ -211,7 +229,13 @@ function Areas({ onAreaChange }) {
                 {areas.map(area => {
                   const isSelected = areaSeleccionada === area.id;
                   return (
-                    <tr key={area.id} className="table-row-soft" style={{ cursor: 'pointer' }} onClick={() => handleSeleccionarArea(area)}>
+                    <tr
+                      key={area.id}
+                      className="table-row-soft"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleSeleccionarArea(area)}
+                      title={isSelected ? 'Ocultar los equipos de esta área' : 'Ver los equipos asignados a esta área'}
+                    >
                       <td className="fw-bold text-dark">{area.nombre}</td>
                       <td>{area.descripcion || '—'}</td>
                       <td className="text-muted small">
@@ -230,14 +254,14 @@ function Areas({ onAreaChange }) {
                         <button
                           onClick={(e) => { e.stopPropagation(); abrirEditar(area); }}
                           className="btn btn-sm btn-link text-warning p-1 me-2"
-                          title="Editar"
+                          title="Editar esta área"
                         >
                           <i className="bi bi-pencil fs-5"></i>
                         </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); eliminarArea(area.id); }}
                           className="btn btn-sm btn-link text-danger p-1"
-                          title="Eliminar"
+                          title="Eliminar esta área (desasigna sus equipos)"
                         >
                           <i className="bi bi-trash3 fs-5"></i>
                         </button>
@@ -302,7 +326,12 @@ function Areas({ onAreaChange }) {
                 <i className="bi bi-building text-success me-2"></i>
                 {modoEdicion ? 'Editar Área' : 'Nueva Área'}
               </h6>
-              <button type="button" className="btn-close shadow-none" onClick={cerrarModal}></button>
+              <button
+                type="button"
+                className="btn-close shadow-none"
+                onClick={cerrarModal}
+                title="Cerrar sin guardar"
+              ></button>
             </div>
 
             <form onSubmit={guardarArea} className="p-4">
@@ -345,6 +374,7 @@ function Areas({ onAreaChange }) {
                 className="btn btn-success w-100 py-2 fw-semibold"
                 disabled={enviando}
                 style={{ backgroundColor: '#28a745', border: 'none' }}
+                title="Guardar los datos de esta área"
               >
                 {enviando ? (
                   <>
