@@ -288,9 +288,9 @@ function EditarEquipo({ equipoId, onVolver }) {
                 rows="3"
                 value={form.notas}
                 onChange={handleChange}
-                maxLength={50}
+                maxLength={250}
               />
-              <small className="text-muted d-block mt-1">{form.notas.length}/50</small>
+              <small className="text-muted d-block mt-1">{form.notas.length}/250</small>
             </div>
           </div>
 
