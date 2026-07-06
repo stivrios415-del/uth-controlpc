@@ -84,10 +84,26 @@ function Personas({ onPersonaChange }) {
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
+  // ==================== VALIDACIÓN DEL FORMULARIO ====================
+  const validarPersona = () => {
+    const faltantes = [];
+    if (!form.nombre.trim()) faltantes.push('NOMBRE');
+    if (!form.email.trim()) faltantes.push('EMAIL');
+    if (!form.telefono.trim()) faltantes.push('TELÉFONO');
+    if (!form.cargo.trim()) faltantes.push('CARGO');
+    return faltantes;
+  };
+
   const guardarPersona = async (e) => {
     e.preventDefault();
-    if (!form.nombre.trim()) {
-      setMensaje({ tipo: 'danger', texto: 'El nombre es obligatorio.' });
+
+    const camposFaltantes = validarPersona();
+    if (camposFaltantes.length > 0) {
+      alert(
+        '⚠️ Faltan campos por completar:\n\n' +
+        camposFaltantes.map(c => `• ${c}`).join('\n') +
+        '\n\nPor favor llena todos los campos obligatorios antes de guardar.'
+      );
       return;
     }
 
@@ -127,7 +143,7 @@ function Personas({ onPersonaChange }) {
       }, 1500);
 
     } catch (err) {
-      setMensaje({ tipo: 'danger', texto: 'Error al guardar: ' + err.message });
+      alert('Error al guardar: ' + err.message);
       setEnviando(false);
     }
   };
@@ -178,7 +194,7 @@ function Personas({ onPersonaChange }) {
     return (
       <div className="alert alert-danger">
         <i className="bi bi-exclamation-triangle-fill me-2"></i>
-        Error al cargar personas: {error}
+        Error al cargar personal: {error}
       </div>
     );
   }
@@ -192,9 +208,13 @@ function Personas({ onPersonaChange }) {
               <i className="bi bi-people text-success me-2"></i>
               Personas
             </h5>
-            <p className="text-muted small m-0">Total: {personas.length} personas registradas</p>
+            <p className="text-muted small m-0">Total: {personas.length} personal registrado</p>
           </div>
-          <button onClick={abrirNuevo} className="btn btn-success px-4 py-2 fw-semibold">
+          <button
+            onClick={abrirNuevo}
+            className="btn btn-success px-4 py-2 fw-semibold"
+            title="Registrar una nueva persona"
+          >
             <i className="bi bi-plus-lg me-2"></i>Nueva Persona
           </button>
         </div>
@@ -221,28 +241,34 @@ function Personas({ onPersonaChange }) {
                 {personas.map(persona => {
                   const isSelected = personaSeleccionada === persona.id;
                   return (
-                    <tr key={persona.id} className="table-row-soft" style={{ cursor: 'pointer' }} onClick={() => handleSeleccionarPersona(persona)}>
-                      <td className="fw-bold text-dark">{persona.nombre}</td>
-                      <td>{persona.email || '—'}</td>
-                      <td>{persona.telefono || '—'}</td>
-                      <td>{persona.cargo || '—'}</td>
+                    <tr key={persona.id} className="table-row-soft">
+                      <td className="fw-bold text-dark" onClick={() => handleSeleccionarPersona(persona)} style={{ cursor: 'pointer' }}>{persona.nombre}</td>
+                      <td onClick={() => handleSeleccionarPersona(persona)} style={{ cursor: 'pointer' }}>{persona.email || '—'}</td>
+                      <td onClick={() => handleSeleccionarPersona(persona)} style={{ cursor: 'pointer' }}>{persona.telefono || '—'}</td>
+                      <td onClick={() => handleSeleccionarPersona(persona)} style={{ cursor: 'pointer' }}>{persona.cargo || '—'}</td>
                       <td className="text-center">
-                        <span className="badge bg-info text-white">
-                          {isSelected ? '👀' : '📋'}
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleSeleccionarPersona(persona)}
+                          className="btn btn-sm btn-info text-white rounded-pill px-3"
+                          style={{ fontSize: '12px' }}
+                          title={isSelected ? 'Ocultar los equipos de esta persona' : 'Ver los equipos asignados a esta persona'}
+                        >
+                          {isSelected ? '👀 Ver' : '📋 Ver'}
+                        </button>
                       </td>
                       <td className="text-end">
                         <button
                           onClick={(e) => { e.stopPropagation(); abrirEditar(persona); }}
                           className="btn btn-sm btn-link text-warning p-1 me-2"
-                          title="Editar"
+                          title="Editar esta persona"
                         >
                           <i className="bi bi-pencil fs-5"></i>
                         </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); eliminarPersona(persona.id); }}
                           className="btn btn-sm btn-link text-danger p-1"
-                          title="Eliminar"
+                          title="Eliminar esta persona (desasigna sus equipos)"
                         >
                           <i className="bi bi-trash3 fs-5"></i>
                         </button>
@@ -307,7 +333,12 @@ function Personas({ onPersonaChange }) {
                 <i className="bi bi-people text-success me-2"></i>
                 {modoEdicion ? 'Editar Persona' : 'Nueva Persona'}
               </h6>
-              <button type="button" className="btn-close shadow-none" onClick={cerrarModal}></button>
+              <button
+                type="button"
+                className="btn-close shadow-none"
+                onClick={cerrarModal}
+                title="Cerrar sin guardar"
+              ></button>
             </div>
 
             <form onSubmit={guardarPersona} className="p-4">
@@ -333,7 +364,7 @@ function Personas({ onPersonaChange }) {
               </div>
 
               <div className="mb-3">
-                <label className="form-label fw-semibold text-secondary small">Email</label>
+                <label className="form-label fw-semibold text-secondary small">Email *</label>
                 <input
                   type="email"
                   name="email"
@@ -341,12 +372,13 @@ function Personas({ onPersonaChange }) {
                   placeholder="correo@ejemplo.com"
                   value={form.email}
                   onChange={handleChange}
+                  required
                   disabled={enviando}
                 />
               </div>
 
               <div className="mb-3">
-                <label className="form-label fw-semibold text-secondary small">Teléfono</label>
+                <label className="form-label fw-semibold text-secondary small">Teléfono *</label>
                 <input
                   type="text"
                   name="telefono"
@@ -354,12 +386,13 @@ function Personas({ onPersonaChange }) {
                   placeholder="1234-5678"
                   value={form.telefono}
                   onChange={handleChange}
+                  required
                   disabled={enviando}
                 />
               </div>
 
               <div className="mb-4">
-                <label className="form-label fw-semibold text-secondary small">Cargo</label>
+                <label className="form-label fw-semibold text-secondary small">Cargo *</label>
                 <input
                   type="text"
                   name="cargo"
@@ -367,6 +400,7 @@ function Personas({ onPersonaChange }) {
                   placeholder="Técnico, Docente, etc."
                   value={form.cargo}
                   onChange={handleChange}
+                  required
                   disabled={enviando}
                 />
               </div>
@@ -376,6 +410,7 @@ function Personas({ onPersonaChange }) {
                 className="btn btn-success w-100 py-2 fw-semibold"
                 disabled={enviando}
                 style={{ backgroundColor: '#28a745', border: 'none' }}
+                title="Guardar los datos de esta persona"
               >
                 {enviando ? (
                   <>
