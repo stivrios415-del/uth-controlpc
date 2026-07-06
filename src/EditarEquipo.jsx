@@ -9,10 +9,11 @@ function EditarEquipo({ equipoId, onVolver }) {
     ram_gb: '',
     almacenamiento: '',
     estado: 'Operativo',
-    laboratorio_id: '',
+    ubicacion: '',
     notas: ''
   });
   const [laboratorios, setLaboratorios] = useState([]);
+  const [areas, setAreas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [enviando, setEnviando] = useState(false);
@@ -40,7 +41,25 @@ function EditarEquipo({ equipoId, onVolver }) {
 
       if (labsError) throw labsError;
 
+      // Obtener áreas administrativas
+      const { data: areasData, error: areasError } = await supabase
+        .from('areas')
+        .select('*')
+        .order('nombre');
+
+      if (areasError) throw areasError;
+
       setLaboratorios(labs || []);
+      setAreas(areasData || []);
+
+      // Reconstruye el valor combinado de UBICACIÓN a partir de lo que ya tenía el equipo
+      let ubicacionActual = '';
+      if (equipo.laboratorio_id) {
+        ubicacionActual = `lab-${equipo.laboratorio_id}`;
+      } else if (equipo.area_id) {
+        ubicacionActual = `area-${equipo.area_id}`;
+      }
+
       setForm({
         marca: equipo.marca || '',
         modelo: equipo.modelo || '',
@@ -48,7 +67,7 @@ function EditarEquipo({ equipoId, onVolver }) {
         ram_gb: equipo.ram_gb || '',
         almacenamiento: equipo.almacenamiento || '',
         estado: equipo.estado || 'Operativo',
-        laboratorio_id: equipo.laboratorio_id || '',
+        ubicacion: ubicacionActual,
         notas: equipo.notas || ''
       });
 
@@ -81,6 +100,15 @@ function EditarEquipo({ equipoId, onVolver }) {
 
     setEnviando(true);
     try {
+      // Interpreta la UBICACIÓN unificada ("lab-3" o "area-2") en la columna correcta
+      let laboratorioId = null;
+      let areaId = null;
+      if (form.ubicacion.startsWith('lab-')) {
+        laboratorioId = parseInt(form.ubicacion.replace('lab-', ''));
+      } else if (form.ubicacion.startsWith('area-')) {
+        areaId = parseInt(form.ubicacion.replace('area-', ''));
+      }
+
       const payload = {
         marca: form.marca,
         modelo: form.modelo || null,
@@ -88,7 +116,8 @@ function EditarEquipo({ equipoId, onVolver }) {
         ram_gb: form.ram_gb ? parseInt(form.ram_gb) : null,
         almacenamiento: form.almacenamiento || null,
         estado: form.estado,
-        laboratorio_id: form.laboratorio_id ? parseInt(form.laboratorio_id) : null,
+        laboratorio_id: laboratorioId,
+        area_id: areaId,
         notas: form.notas || null,
       };
 
@@ -226,19 +255,28 @@ function EditarEquipo({ equipoId, onVolver }) {
               </select>
             </div>
             <div className="col-12 col-sm-6">
-              <label className="form-label fw-semibold text-secondary small">Laboratorio</label>
+              <label className="form-label fw-semibold text-secondary small">Ubicación</label>
               <select
-                name="laboratorio_id"
+                name="ubicacion"
                 className="form-select app-input"
-                value={form.laboratorio_id}
+                value={form.ubicacion}
                 onChange={handleChange}
               >
                 <option value="">-- Sin Asignar --</option>
-                {laboratorios.map(lab => (
-                  <option key={lab.id} value={lab.id}>
-                    {lab.nombre} (Edif. {lab.edificio})
-                  </option>
-                ))}
+                <optgroup label="🏢 Laboratorios">
+                  {laboratorios.map(lab => (
+                    <option key={`lab-${lab.id}`} value={`lab-${lab.id}`}>
+                      {lab.nombre} (Edif. {lab.edificio})
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="🏛️ Áreas Administrativas">
+                  {areas.map(area => (
+                    <option key={`area-${area.id}`} value={`area-${area.id}`}>
+                      {area.nombre}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
             </div>
 
@@ -250,7 +288,9 @@ function EditarEquipo({ equipoId, onVolver }) {
                 rows="3"
                 value={form.notas}
                 onChange={handleChange}
+                maxLength={50}
               />
+              <small className="text-muted d-block mt-1">{form.notas.length}/50</small>
             </div>
           </div>
 
