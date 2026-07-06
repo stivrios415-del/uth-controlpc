@@ -210,9 +210,50 @@ function App() {
     }
   };
 
+  // ==================== VALIDACIÓN DEL FORMULARIO ====================
+  const validarFormulario = () => {
+    const faltantes = [];
+
+    if (!form.tipo) faltantes.push('TIPO');
+    if (!form.marca) faltantes.push('MARCA');
+    if (!form.modelo) faltantes.push('MODELO');
+    if (!form.numero_serie.trim()) faltantes.push('SERIE');
+
+    // Procesador, RAM, Disco y Año solo aplican para CPU/Laptop, no para Monitor
+    if (!esMonitor) {
+      if (!form.procesador) faltantes.push('PROCESADOR');
+      if (!form.ram_gb) faltantes.push('RAM (GB)');
+      if (!form.disco) faltantes.push('DISCO');
+      if (!form.ano) faltantes.push('AÑO');
+    }
+
+    if (!form.estado) faltantes.push('ESTADO');
+    if (!form.ubicacion) faltantes.push('UBICACIÓN');
+
+    // Si la ubicación es un Área Administrativa, también se exige asignar una persona
+    if (form.ubicacion.startsWith('area-') && !form.persona_id) {
+      faltantes.push('ASIGNAR A');
+    }
+
+    if (!form.notas.trim()) faltantes.push('OBSERVACIONES');
+
+    return faltantes;
+  };
+
   const guardarEquipo = async (e) => {
     e.preventDefault();
     if (submitting) return;
+
+    const camposFaltantes = validarFormulario();
+    if (camposFaltantes.length > 0) {
+      alert(
+        '⚠️ Faltan campos por completar:\n\n' +
+        camposFaltantes.map(c => `• ${c}`).join('\n') +
+        '\n\nPor favor llena todos los campos antes de registrar el equipo.'
+      );
+      return;
+    }
+
     setSubmitting(true);
 
     let ramValue = null;
@@ -861,8 +902,8 @@ function App() {
 
                 <div className="col-12">
                   <label className="form-label text-secondary small fw-semibold">OBSERVACIONES</label>
-                  <textarea name="notas" className="form-control app-input rounded-3" rows="2" value={form.notas} onChange={handleInputChange} placeholder="Detalles adicionales..." maxLength={250}></textarea>
-                  <small className="text-muted d-block mt-1">{form.notas.length}/250</small>
+                  <textarea name="notas" className="form-control app-input rounded-3" rows="2" value={form.notas} onChange={handleInputChange} placeholder="Detalles adicionales..." maxLength={50}></textarea>
+                  <small className="text-muted d-block mt-1">{form.notas.length}/50</small>
                 </div>
               </div>
               <button type="submit" className="btn-brand mt-3 mt-md-4 w-100 py-2" disabled={submitting}>
@@ -915,10 +956,18 @@ function App() {
                 </select>
               </div>
               <div className="col-12 col-md-6 col-lg-4 d-flex gap-2">
-                <button onClick={exportarPDF} className="btn btn-danger w-100 py-2 fw-bold btn-sm">
+                <button
+                  onClick={exportarPDF}
+                  className="btn btn-danger w-100 py-2 fw-bold btn-sm"
+                  title="Descargar el inventario filtrado en formato PDF"
+                >
                   <i className="bi bi-file-earmark-pdf-fill me-1"></i> PDF
                 </button>
-                <button onClick={exportarExcel} className="btn btn-success w-100 py-2 fw-bold btn-sm">
+                <button
+                  onClick={exportarExcel}
+                  className="btn btn-success w-100 py-2 fw-bold btn-sm"
+                  title="Descargar el inventario filtrado en formato Excel (.xlsx)"
+                >
                   <i className="bi bi-file-earmark-excel-fill me-1"></i> Excel
                 </button>
               </div>
