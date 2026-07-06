@@ -10,6 +10,7 @@ import Areas from './Areas';
 import Personas from './Personas';
 import Extras from './Extras';
 import Catalogos from './Catalogos';
+import Papelera from './Papelera';
 import HistorialPC from './historial';
 import EditarEquipo from './EditarEquipo';
 import { supabase } from './supabaseClient';
@@ -51,6 +52,9 @@ function App() {
   const [form, setForm] = useState(INITIAL_FORM_STATE);
   const [pcSeleccionadaId, setPcSeleccionadaId] = useState(null);
   const [equipoEditandoId, setEquipoEditandoId] = useState(null);
+  const [equipoAEliminarId, setEquipoAEliminarId] = useState(null);
+  const [motivoBaja, setMotivoBaja] = useState('');
+  const [enviandoBaja, setEnviandoBaja] = useState(false);
   const [filtroReporte, setFiltroReporte] = useState('todos');
   const [navbarOpen, setNavbarOpen] = useState(false);
   const [laboratorioSeleccionado, setLaboratorioSeleccionado] = useState(null);
@@ -104,13 +108,14 @@ function App() {
     setErrorConexion(false);
 
     try {
-      // 1. Computadoras con laboratorio
+      // 1. Computadoras con laboratorio (solo activas, no eliminadas)
       const { data: comps, error: compError } = await supabase
         .from('computadoras')
         .select(`
           *,
           laboratorios ( id, nombre, edificio )
         `)
+        .eq('eliminado', false)
         .order('id', { ascending: false });
 
       if (compError) throw compError;
@@ -149,13 +154,14 @@ function App() {
         console.warn('Error cargando personas:', e);
       }
 
-      // 5. Estadísticas
+      // 5. Estadísticas (solo sobre equipos activos)
       const total = comps.length;
       const operativos = comps.filter(c => c.estado === 'Operativo').length;
       const mantenimiento = comps.filter(c => c.estado === 'Mantenimiento').length;
       const danados = comps.filter(c => c.estado === 'Dañado').length;
 
-      // 6. Código automático
+      // 6. Código automático (se calcula sobre TODOS los registros, incluyendo eliminados,
+      //    para que nunca se repita un código ya usado)
       let codigoAutomatico = 'INV-0001';
       try {
         const { data: ultimo, error: ultimoError } = await supabase
@@ -290,6 +296,7 @@ function App() {
       persona_id: (areaId && form.persona_id) ? parseInt(form.persona_id) : null,
       fecha_asignacion: (areaId && form.persona_id) ? new Date().toISOString() : null,
       notas: form.notas || null,
+      eliminado: false,
     };
 
     const { error } = await supabase
@@ -305,17 +312,67 @@ function App() {
     setSubmitting(false);
   };
 
-  const eliminarEquipo = async (id) => {
-    if (!window.confirm('¿Estás seguro de eliminar este equipo?')) return;
-    const { error } = await supabase
-      .from('computadoras')
-      .delete()
-      .eq('id', id);
+  // ==================== ELIMINACIÓN (SOFT DELETE CON MOTIVO) ====================
+  // En vez de borrar el registro para siempre, se marca como eliminado y
+  // se guarda cuándo, quién y POR QUÉ lo hizo. El equipo pasa a "Historial".
 
-    if (error) {
-      alert('Error al eliminar: ' + error.message);
-    } else {
+  // Abre el modal pidiendo el motivo de la baja
+  const abrirConfirmarEliminar = (id) => {
+    setEquipoAEliminarId(id);
+    setMotivoBaja('');
+  };
+
+  // Cierra el modal sin hacer nada
+  const cancelarEliminar = () => {
+    if (enviandoBaja) return;
+    setEquipoAEliminarId(null);
+    setMotivoBaja('');
+  };
+
+  // Confirma la baja: exige un motivo, guarda todo y actualiza la bitácora
+  const confirmarEliminarEquipo = async () => {
+    if (!motivoBaja.trim()) {
+      alert('⚠️ Debes indicar el motivo por el que se elimina este equipo.');
+      return;
+    }
+    if (enviandoBaja) return;
+    setEnviandoBaja(true);
+
+    const id = equipoAEliminarId;
+    const motivo = motivoBaja.trim();
+
+    try {
+      // Deja constancia en la bitácora del equipo (misma tabla que usa HistorialPC)
+      const { error: histError } = await supabase
+        .from('historial_mantenimiento')
+        .insert([{
+          computadora_id: id,
+          descripcion_problema: `Equipo dado de baja por ${usuario?.nombre || 'usuario desconocido'}.\nMotivo: ${motivo}`,
+          costo: 0,
+        }]);
+      if (histError) {
+        console.warn('No se pudo registrar la baja en la bitácora:', histError);
+      }
+
+      const { error } = await supabase
+        .from('computadoras')
+        .update({
+          eliminado: true,
+          fecha_eliminacion: new Date().toISOString(),
+          eliminado_por: usuario?.nombre || null,
+          motivo_eliminacion: motivo
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setEquipoAEliminarId(null);
+      setMotivoBaja('');
       await cargarInventario();
+    } catch (error) {
+      alert('Error al eliminar: ' + error.message);
+    } finally {
+      setEnviandoBaja(false);
     }
   };
 
@@ -684,7 +741,7 @@ function App() {
                         <button onClick={() => setPcSeleccionadaId(comp.id)} className="btn btn-sm btn-link text-primary p-1 rounded-3 me-1" title="Historial">
                           <i className="bi bi-journal-text fs-6"></i>
                         </button>
-                        <button onClick={() => eliminarEquipo(comp.id)} className="btn btn-sm btn-link text-danger p-1 hover-bg-danger rounded-3" title="Eliminar">
+                        <button onClick={() => abrirConfirmarEliminar(comp.id)} className="btn btn-sm btn-link text-danger p-1 hover-bg-danger rounded-3" title="Eliminar">
                           <i className="bi bi-trash3 fs-6"></i>
                         </button>
                       </td>
@@ -1044,6 +1101,9 @@ function App() {
       case 'catalogos':
         return <Catalogos onCatalogoChange={cargarCatalogos} />;
 
+      case 'papelera':
+        return <Papelera usuario={usuario} onCambio={cargarInventario} />;
+
       case 'equipos':
       default:
         return renderEquipos();
@@ -1147,6 +1207,12 @@ function App() {
               >
                 <i className="bi bi-box-seam me-2"></i>Extras
               </button>
+              <button
+                className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'papelera' ? 'nav-pill-active' : ''}`}
+                onClick={() => { setVistaActual('papelera'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
+              >
+                <i className="bi bi-clock-history me-2"></i>Historial
+              </button>
               {usuario.rol === 'admin' && (
                 <button
                   className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'catalogos' ? 'nav-pill-active' : ''}`}
@@ -1188,6 +1254,72 @@ function App() {
           renderContenido()
         )}
       </div>
+
+      {/* MODAL: Confirmar eliminación con motivo obligatorio */}
+      {equipoAEliminarId && (
+        <div className="modal-overlay" onClick={cancelarEliminar}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header-custom">
+              <h6 className="fw-bold m-0 text-danger">
+                <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                Dar de baja este equipo
+              </h6>
+              <button type="button" className="btn-close shadow-none" onClick={cancelarEliminar} disabled={enviandoBaja}></button>
+            </div>
+
+            <div className="p-4">
+              <p className="text-secondary small mb-3">
+                El equipo <strong>{computadoras.find(c => c.id === equipoAEliminarId)?.codigo_inventario}</strong> no se
+                borrará: se moverá al <strong>Historial de Bajas</strong> y podrás restaurarlo cuando quieras. Para
+                continuar, indica el motivo de la baja.
+              </p>
+
+              <label className="form-label fw-semibold text-secondary small">
+                Motivo de la eliminación <span className="text-danger">*</span>
+              </label>
+              <textarea
+                className="form-control custom-input"
+                rows="3"
+                placeholder="Ej: Equipo dañado sin reparación posible, robo, fin de vida útil, reemplazo por equipo nuevo..."
+                value={motivoBaja}
+                onChange={(e) => setMotivoBaja(e.target.value)}
+                maxLength={200}
+                autoFocus
+                disabled={enviandoBaja}
+              />
+              <small className="text-muted d-block mt-1">{motivoBaja.length}/200</small>
+
+              <div className="d-flex gap-2 mt-4">
+                <button
+                  type="button"
+                  className="btn btn-light border w-100 py-2 text-secondary fw-semibold"
+                  onClick={cancelarEliminar}
+                  disabled={enviandoBaja}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger w-100 py-2 fw-semibold"
+                  onClick={confirmarEliminarEquipo}
+                  disabled={enviandoBaja || !motivoBaja.trim()}
+                >
+                  {enviandoBaja ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                      Eliminando...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-trash3 me-2"></i>Confirmar Baja
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ESTILOS */}
       <style>{`
@@ -1254,6 +1386,52 @@ function App() {
         .kpi-icon-warning { background: #fef3e2; color: #b45309; }
         .kpi-icon-danger { background: #fdeceb; color: #dc2626; }
         .app-input { border: 1.5px solid #e2ede7 !important; background-color: #f9fbfa !important; font-size: 0.9rem; }
+        .modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.5);
+          backdrop-filter: blur(4px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1060;
+          padding: 20px;
+        }
+        .modal-card {
+          background: #ffffff;
+          border-radius: 16px;
+          max-width: 480px;
+          width: 100%;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          overflow: hidden;
+          animation: slideIn 0.25s ease;
+        }
+        @keyframes slideIn {
+          from { transform: translateY(-30px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        .modal-header-custom {
+          padding: 18px 24px;
+          border-bottom: 1px solid #eef2f4;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          background: #fdf2f2;
+        }
+        .custom-input {
+          background-color: #f6faf8 !important;
+          border: 1.5px solid #e2ede7 !important;
+          border-radius: 10px !important;
+          padding: 11px 15px;
+          font-size: 0.9rem;
+          transition: all 0.2s ease;
+          box-shadow: none !important;
+        }
+        .custom-input:focus {
+          background-color: #ffffff !important;
+          border-color: #ef4444 !important;
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important;
+        }
         .readonly-input { color: #059669 !important; background-color: #f2faf6 !important; }
         .transition-all { transition: all 0.25s ease; }
         .hover-shadow:hover { transform: translateY(-2px); box-shadow: 0 .5rem 1rem rgba(6, 95, 70, 0.1) !important; }
