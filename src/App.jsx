@@ -861,8 +861,8 @@ function App() {
 
                 <div className="col-12">
                   <label className="form-label text-secondary small fw-semibold">OBSERVACIONES</label>
-                  <textarea name="notas" className="form-control app-input rounded-3" rows="2" value={form.notas} onChange={handleInputChange} placeholder="Detalles adicionales..." maxLength={50}></textarea>
-                  <small className="text-muted d-block mt-1">{form.notas.length}/50</small>
+                  <textarea name="notas" className="form-control app-input rounded-3" rows="2" value={form.notas} onChange={handleInputChange} placeholder="Detalles adicionales..." maxLength={250}></textarea>
+                  <small className="text-muted d-block mt-1">{form.notas.length}/250</small>
                 </div>
               </div>
               <button type="submit" className="btn-brand mt-3 mt-md-4 w-100 py-2" disabled={submitting}>
