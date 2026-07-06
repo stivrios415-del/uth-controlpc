@@ -361,7 +361,8 @@ function Extras() {
 
               <div className="mb-3">
                 <label className="form-label fw-semibold text-secondary small">Serie</label>
-                <input type="text" name="numero_serie" className="form-control custom-input" value={form.numero_serie} onChange={handleChange} disabled={enviando} />
+                <input type="text" name="numero_serie" className="form-control custom-input" value={form.numero_serie} onChange={handleChange} disabled={enviando} maxLength={50} />
+                <small className="text-muted d-block mt-1">{form.numero_serie.length}/50</small>
               </div>
 
               <div className="mb-3">
@@ -410,7 +411,8 @@ function Extras() {
 
               <div className="mb-4">
                 <label className="form-label fw-semibold text-secondary small">Notas</label>
-                <textarea name="notas" className="form-control custom-input" rows="2" value={form.notas} onChange={handleChange} disabled={enviando} />
+                <textarea name="notas" className="form-control custom-input" rows="2" value={form.notas} onChange={handleChange} disabled={enviando} maxLength={50} />
+                <small className="text-muted d-block mt-1">{form.notas.length}/50</small>
               </div>
 
               <button
