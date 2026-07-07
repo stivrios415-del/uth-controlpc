@@ -77,6 +77,9 @@ function App() {
   // Detecta si el tipo seleccionado es Monitor, para mostrar solo Marca/Modelo/Serie
   const esMonitor = form.tipo.toLowerCase().includes('monitor');
 
+  // Atajo para saber si el usuario actual es administrador
+  const esAdmin = usuario?.rol === 'admin';
+
   // ==================== FUNCIONES ====================
   const cargarCatalogos = useCallback(async () => {
     try {
@@ -209,6 +212,14 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Si un usuario no-admin quedó posicionado en una vista restringida (por ejemplo,
+  // cambiando de sesión), lo regresamos a "Equipos" automáticamente.
+  useEffect(() => {
+    if (!esAdmin && (vistaActual === 'papelera' || vistaActual === 'personas' || vistaActual === 'catalogos')) {
+      setVistaActual('equipos');
+    }
+  }, [esAdmin, vistaActual]);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === 'ubicacion' && !value.startsWith('area-')) {
@@ -318,9 +329,14 @@ function App() {
   // ==================== ELIMINACIÓN (SOFT DELETE CON MOTIVO) ====================
   // En vez de borrar el registro para siempre, se marca como eliminado y
   // se guarda cuándo, quién y POR QUÉ lo hizo. El equipo pasa a "Historial".
+  // SOLO EL ADMINISTRADOR puede dar de baja equipos.
 
   // Abre el modal pidiendo el motivo de la baja
   const abrirConfirmarEliminar = (id) => {
+    if (!esAdmin) {
+      alert('⛔ Solo un administrador puede dar de baja equipos.');
+      return;
+    }
     setEquipoAEliminarId(id);
     setMotivoBaja('');
   };
@@ -334,6 +350,11 @@ function App() {
 
   // Confirma la baja: exige un motivo, guarda todo y actualiza la bitácora
   const confirmarEliminarEquipo = async () => {
+    if (!esAdmin) {
+      alert('⛔ Solo un administrador puede dar de baja equipos.');
+      setEquipoAEliminarId(null);
+      return;
+    }
     if (!motivoBaja.trim()) {
       alert('⚠️ Debes indicar el motivo por el que se elimina este equipo.');
       return;
@@ -747,9 +768,11 @@ function App() {
                         <button onClick={() => setPcSeleccionadaId(comp.id)} className="btn btn-sm btn-link text-primary p-1 rounded-3 me-1" title="Historial">
                           <i className="bi bi-journal-text fs-6"></i>
                         </button>
-                        <button onClick={() => abrirConfirmarEliminar(comp.id)} className="btn btn-sm btn-link text-danger p-1 hover-bg-danger rounded-3" title="Eliminar">
-                          <i className="bi bi-trash3 fs-6"></i>
-                        </button>
+                        {esAdmin && (
+                          <button onClick={() => abrirConfirmarEliminar(comp.id)} className="btn btn-sm btn-link text-danger p-1 hover-bg-danger rounded-3" title="Eliminar (solo administrador)">
+                            <i className="bi bi-trash3 fs-6"></i>
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -1082,6 +1105,8 @@ function App() {
         );
 
       case 'personas':
+        // Módulo exclusivo de administradores
+        if (!esAdmin) return renderEquipos();
         return (
           <>
             <Personas onPersonaChange={cargarInventario} />
@@ -1101,9 +1126,13 @@ function App() {
         return <Extras />;
 
       case 'catalogos':
+        // Módulo exclusivo de administradores
+        if (!esAdmin) return renderEquipos();
         return <Catalogos onCatalogoChange={cargarCatalogos} />;
 
       case 'papelera':
+        // Módulo exclusivo de administradores
+        if (!esAdmin) return renderEquipos();
         return <Papelera usuario={usuario} onCambio={cargarInventario} />;
 
       case 'escaner':
@@ -1207,31 +1236,35 @@ function App() {
               >
                 <i className="bi bi-shield-lock me-2"></i>Administrativo
               </button>
-              <button
-                className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'personas' ? 'nav-pill-active' : ''}`}
-                onClick={() => { setVistaActual('personas'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
-              >
-                <i className="bi bi-people me-2"></i>Personal de trabajo 
-              </button>
+              {esAdmin && (
+                <button
+                  className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'personas' ? 'nav-pill-active' : ''}`}
+                  onClick={() => { setVistaActual('personas'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
+                >
+                  <i className="bi bi-people me-2"></i>Personal de trabajo 
+                </button>
+              )}
               <button
                 className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'extras' ? 'nav-pill-active' : ''}`}
                 onClick={() => { setVistaActual('extras'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
               >
                 <i className="bi bi-box-seam me-2"></i>Extras
               </button>
-              <button
-                className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'papelera' ? 'nav-pill-active' : ''}`}
-                onClick={() => { setVistaActual('papelera'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
-              >
-                <i className="bi bi-clock-history me-2"></i>Historial
-              </button>
+              {esAdmin && (
+                <button
+                  className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'papelera' ? 'nav-pill-active' : ''}`}
+                  onClick={() => { setVistaActual('papelera'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
+                >
+                  <i className="bi bi-clock-history me-2"></i>Historial
+                </button>
+              )}
               <button
                 className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'escaner' ? 'nav-pill-active' : ''}`}
                 onClick={() => { setVistaActual('escaner'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
               >
                 <i className="bi bi-qr-code-scan me-2"></i>Escanear QR
               </button>
-              {usuario.rol === 'admin' && (
+              {esAdmin && (
                 <button
                   className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'catalogos' ? 'nav-pill-active' : ''}`}
                   onClick={() => { setVistaActual('catalogos'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
@@ -1273,8 +1306,8 @@ function App() {
         )}
       </div>
 
-      {/* MODAL: Confirmar eliminación con motivo obligatorio */}
-      {equipoAEliminarId && (
+      {/* MODAL: Confirmar eliminación con motivo obligatorio (solo administrador) */}
+      {equipoAEliminarId && esAdmin && (
         <div className="modal-overlay" onClick={cancelarEliminar}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header-custom">
