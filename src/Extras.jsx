@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 
 const TIPOS_EXTRA = ['Micrófono', 'Parlante', 'Impresora', 'Proyector', 'Escáner', 'Router', 'Switch', 'Cámara Web', 'UPS', 'Otro'];
 
-function Extras() {
+function Extras({ esAdmin }) {
   const [extras, setExtras] = useState([]);
   const [laboratorios, setLaboratorios] = useState([]);
   const [areas, setAreas] = useState([]);
@@ -190,7 +190,12 @@ function Extras() {
     }
   };
 
+  // SOLO EL ADMINISTRADOR puede eliminar equipos extra.
   const eliminarExtra = async (id) => {
+    if (!esAdmin) {
+      alert('⛔ Solo un administrador puede eliminar equipos extra.');
+      return;
+    }
     if (!window.confirm('¿Estás seguro de eliminar este equipo extra?')) return;
     try {
       const { error } = await supabase.from('extras').delete().eq('id', id);
@@ -298,13 +303,15 @@ function Extras() {
                       >
                         <i className="bi bi-pencil fs-5"></i>
                       </button>
-                      <button
-                        onClick={() => eliminarExtra(extra.id)}
-                        className="btn btn-sm btn-link text-danger p-1"
-                        title="Eliminar"
-                      >
-                        <i className="bi bi-trash3 fs-5"></i>
-                      </button>
+                      {esAdmin && (
+                        <button
+                          onClick={() => eliminarExtra(extra.id)}
+                          className="btn btn-sm btn-link text-danger p-1"
+                          title="Eliminar (solo administrador)"
+                        >
+                          <i className="bi bi-trash3 fs-5"></i>
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
