@@ -217,7 +217,7 @@ export default function Login({ onLoginSuccess }) {
               onError={(e) => { e.target.style.display = 'none'; }}
             />
           </div>
-          <h2>CONTROL-PC</h2>
+          <h2>BIENVENIDO</h2>
           <p className="header-subtitle">SISTEMA DE GESTIÓN DE ACTIVOS</p>
         </div>
 
