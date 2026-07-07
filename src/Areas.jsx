@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 
-function Areas({ onAreaChange }) {
+function Areas({ onAreaChange, esAdmin }) {
   const [areas, setAreas] = useState([]);
   const [equiposPorArea, setEquiposPorArea] = useState([]);
   const [areaSeleccionada, setAreaSeleccionada] = useState(null);
@@ -136,7 +136,12 @@ function Areas({ onAreaChange }) {
     }
   };
 
+  // SOLO EL ADMINISTRADOR puede eliminar áreas.
   const eliminarArea = async (id) => {
+    if (!esAdmin) {
+      alert('⛔ Solo un administrador puede eliminar áreas.');
+      return;
+    }
     if (!window.confirm('¿Estás seguro de eliminar esta área? Se desasignarán los equipos.')) return;
 
     try {
@@ -258,13 +263,15 @@ function Areas({ onAreaChange }) {
                         >
                           <i className="bi bi-pencil fs-5"></i>
                         </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); eliminarArea(area.id); }}
-                          className="btn btn-sm btn-link text-danger p-1"
-                          title="Eliminar esta área (desasigna sus equipos)"
-                        >
-                          <i className="bi bi-trash3 fs-5"></i>
-                        </button>
+                        {esAdmin && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); eliminarArea(area.id); }}
+                            className="btn btn-sm btn-link text-danger p-1"
+                            title="Eliminar esta área (solo administrador)"
+                          >
+                            <i className="bi bi-trash3 fs-5"></i>
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
