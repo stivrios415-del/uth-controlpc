@@ -11,6 +11,8 @@ import Personas from './Personas';
 import Extras from './Extras';
 import Catalogos from './Catalogos';
 import Papelera from './Papelera';
+import CodigoQR from './CodigoQR';
+import EscanerQR from './EscanerQR';
 import HistorialPC from './historial';
 import EditarEquipo from './EditarEquipo';
 import { supabase } from './supabaseClient';
@@ -55,6 +57,7 @@ function App() {
   const [equipoAEliminarId, setEquipoAEliminarId] = useState(null);
   const [motivoBaja, setMotivoBaja] = useState('');
   const [enviandoBaja, setEnviandoBaja] = useState(false);
+  const [qrEquipoCodigo, setQrEquipoCodigo] = useState(null);
   const [filtroReporte, setFiltroReporte] = useState('todos');
   const [navbarOpen, setNavbarOpen] = useState(false);
   const [laboratorioSeleccionado, setLaboratorioSeleccionado] = useState(null);
@@ -735,6 +738,9 @@ function App() {
                         <i className="bi bi-person me-1 text-muted"></i>{personaNombre || 'SIN ASIGNAR'}
                       </td>
                       <td className="border-0 text-end pe-2 pe-md-3 rounded-end-3">
+                        <button onClick={() => setQrEquipoCodigo(comp.codigo_inventario)} className="btn btn-sm btn-link text-info p-1 rounded-3 me-1" title="Ver código QR">
+                          <i className="bi bi-qr-code fs-6"></i>
+                        </button>
                         <button onClick={() => abrirEditor(comp.id)} className="btn btn-sm btn-link text-warning p-1 rounded-3 me-1" title="Editar">
                           <i className="bi bi-pencil fs-6"></i>
                         </button>
@@ -959,8 +965,8 @@ function App() {
 
                 <div className="col-12">
                   <label className="form-label text-secondary small fw-semibold">OBSERVACIONES</label>
-                  <textarea name="notas" className="form-control app-input rounded-3" rows="2" value={form.notas} onChange={handleInputChange} placeholder="Detalles adicionales..." maxLength={50}></textarea>
-                  <small className="text-muted d-block mt-1">{form.notas.length}/50</small>
+                  <textarea name="notas" className="form-control app-input rounded-3" rows="2" value={form.notas} onChange={handleInputChange} placeholder="Detalles adicionales..." maxLength={250}></textarea>
+                  <small className="text-muted d-block mt-1">{form.notas.length}/250</small>
                 </div>
               </div>
               <button type="submit" className="btn-brand mt-3 mt-md-4 w-100 py-2" disabled={submitting}>
@@ -1104,6 +1110,16 @@ function App() {
       case 'papelera':
         return <Papelera usuario={usuario} onCambio={cargarInventario} />;
 
+      case 'escaner':
+        return (
+          <EscanerQR
+            onVerHistorial={(id) => {
+              setPcSeleccionadaId(id);
+              setVistaActual('equipos');
+            }}
+          />
+        );
+
       case 'equipos':
       default:
         return renderEquipos();
@@ -1213,6 +1229,12 @@ function App() {
               >
                 <i className="bi bi-clock-history me-2"></i>Historial
               </button>
+              <button
+                className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'escaner' ? 'nav-pill-active' : ''}`}
+                onClick={() => { setVistaActual('escaner'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
+              >
+                <i className="bi bi-qr-code-scan me-2"></i>Escanear QR
+              </button>
               {usuario.rol === 'admin' && (
                 <button
                   className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'catalogos' ? 'nav-pill-active' : ''}`}
@@ -1319,6 +1341,11 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL: Código QR */}
+      {qrEquipoCodigo && (
+        <CodigoQR codigo={qrEquipoCodigo} onClose={() => setQrEquipoCodigo(null)} />
       )}
 
       {/* ESTILOS */}
