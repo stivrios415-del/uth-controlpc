@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 
-function Laboratorios({ onLaboratorioChange }) {
+function Laboratorios({ onLaboratorioChange, esAdmin }) {
   const [laboratorios, setLaboratorios] = useState([]);
   const [equiposPorLaboratorio, setEquiposPorLaboratorio] = useState([]);
   const [laboratorioSeleccionado, setLaboratorioSeleccionado] = useState(null);
@@ -136,7 +136,12 @@ function Laboratorios({ onLaboratorioChange }) {
     }
   };
 
+  // SOLO EL ADMINISTRADOR puede eliminar laboratorios.
   const eliminarLaboratorio = async (id) => {
+    if (!esAdmin) {
+      alert('⛔ Solo un administrador puede eliminar laboratorios.');
+      return;
+    }
     if (!window.confirm('¿Estás seguro de eliminar este laboratorio? Se desasignarán los equipos.')) return;
 
     try {
@@ -258,13 +263,15 @@ function Laboratorios({ onLaboratorioChange }) {
                         >
                           <i className="bi bi-pencil fs-5"></i>
                         </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); eliminarLaboratorio(lab.id); }}
-                          className="btn btn-sm btn-link text-danger p-1"
-                          title="Eliminar este laboratorio (desasigna sus equipos)"
-                        >
-                          <i className="bi bi-trash3 fs-5"></i>
-                        </button>
+                        {esAdmin && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); eliminarLaboratorio(lab.id); }}
+                            className="btn btn-sm btn-link text-danger p-1"
+                            title="Eliminar este laboratorio (solo administrador)"
+                          >
+                            <i className="bi bi-trash3 fs-5"></i>
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
