@@ -1068,10 +1068,6 @@ function App() {
       case 'admin':
         return (
           <>
-            <div className="card border-0 rounded-4 bg-white p-4 shadow-sm mb-4">
-              <h5 className="fw-bold text-dark">Panel Administrativo</h5>
-              <p className="text-muted small">Gestión de áreas administrativas y equipos asociados.</p>
-            </div>
             <Areas onAreaChange={cargarInventario} />
             {areaSeleccionada && (
               <>
@@ -1154,7 +1150,7 @@ function App() {
         <div className="spinner-border mb-3" style={{ width: '3rem', height: '3rem', color: '#10b981' }} role="status">
           <span className="visually-hidden">Cargando...</span>
         </div>
-        <h6 className="fw-bold text-dark mb-1">UTH CONTROL-PC</h6>
+        <h6 className="fw-bold text-dark mb-1">UTH-TIC</h6>
         <p className="text-muted small">Cargando inventario...</p>
       </div>
     );
