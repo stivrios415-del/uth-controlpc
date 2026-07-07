@@ -166,26 +166,12 @@ function App() {
       const mantenimiento = comps.filter(c => c.estado === 'Mantenimiento').length;
       const danados = comps.filter(c => c.estado === 'Dañado').length;
 
-      // 6. Código automático (se calcula sobre TODOS los registros, incluyendo eliminados,
-      //    para que nunca se repita un código ya usado)
-      let codigoAutomatico = 'INV-0001';
-      try {
-        const { data: ultimo, error: ultimoError } = await supabase
-          .from('computadoras')
-          .select('codigo_inventario')
-          .order('id', { ascending: false })
-          .limit(1);
-        if (!ultimoError && ultimo && ultimo.length > 0) {
-          const num = parseInt(ultimo[0].codigo_inventario.replace('INV-', ''));
-          const nuevoNumero = num + 1;
-          codigoAutomatico = `INV-${String(nuevoNumero).padStart(4, '0')}`;
-        }
-      } catch (e) {
-        console.warn('Error calculando código automático:', e);
-      }
+      // El código de inventario ya no se calcula aquí: lo genera un trigger
+      // en Supabase (secuencia atómica) al momento de insertar, para que
+      // nunca se repita aunque varias personas registren equipos a la vez.
 
       setDashboardData({
-        codigo_automatico: codigoAutomatico,
+        codigo_automatico: 'Se generará automáticamente',
         laboratorios: labs,
         areas: areas,
         personas: personas,
@@ -292,7 +278,9 @@ function App() {
     }
 
     const payload = {
-      codigo_inventario: dashboardData.codigo_automatico,
+      // No enviamos codigo_inventario: lo genera automáticamente el trigger
+      // de Supabase usando una secuencia atómica (evita duplicados si varias
+      // personas registran equipos al mismo tiempo).
       tipo: form.tipo || null,
       marca: form.marca || null,
       modelo: form.modelo || null,
@@ -313,13 +301,18 @@ function App() {
       eliminado: false,
     };
 
-    const { error } = await supabase
+    // .select().single() para recibir de vuelta la fila insertada,
+    // incluyendo el codigo_inventario que generó el trigger en Supabase
+    const { data: nuevoEquipo, error } = await supabase
       .from('computadoras')
-      .insert([payload]);
+      .insert([payload])
+      .select()
+      .single();
 
     if (error) {
       alert('Error al guardar: ' + error.message);
     } else {
+      alert(`✅ Equipo registrado correctamente con el código ${nuevoEquipo.codigo_inventario}`);
       setForm(INITIAL_FORM_STATE);
       await cargarInventario();
     }
@@ -850,7 +843,14 @@ function App() {
               <div className="row g-2 g-md-3">
                 <div className="col-12 col-md-4">
                   <label className="form-label text-secondary small fw-semibold">CÓDIGO</label>
-                  <input type="text" className="form-control app-input readonly-input fw-bold rounded-3 py-2" value={dashboardData.codigo_automatico} readOnly />
+                  <input
+                    type="text"
+                    className="form-control app-input readonly-input fw-bold rounded-3 py-2"
+                    value={dashboardData.codigo_automatico}
+                    readOnly
+                    title="El código definitivo se asigna al guardar, para evitar duplicados si varias personas registran equipos al mismo tiempo"
+                  />
+                  <small className="text-muted d-block mt-1">Verás el código real en el mensaje de confirmación</small>
                 </div>
                 <div className="col-12 col-md-4">
                   <label className="form-label text-secondary small fw-semibold">TIPO</label>
