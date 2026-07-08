@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 
-function Personas({ onPersonaChange }) {
+function Personas({ onPersonaChange, esAdmin, onGestionar }) {
   const [personas, setPersonas] = useState([]);
-  const [equiposPorPersona, setEquiposPorPersona] = useState([]);
-  const [personaSeleccionada, setPersonaSeleccionada] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
   const [mostrarModal, setMostrarModal] = useState(false);
@@ -24,24 +22,6 @@ function Personas({ onPersonaChange }) {
       if (error) throw error;
       setPersonas(data || []);
       setError(null);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setCargando(false);
-    }
-  };
-
-  const cargarEquiposPorPersona = async (personaId) => {
-    try {
-      setCargando(true);
-      const { data, error } = await supabase
-        .from('computadoras')
-        .select('*')
-        .eq('persona_id', personaId)
-        .order('codigo_inventario', { ascending: true });
-
-      if (error) throw error;
-      setEquiposPorPersona(data || []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -84,7 +64,6 @@ function Personas({ onPersonaChange }) {
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
-  // ==================== VALIDACIÓN DEL FORMULARIO ====================
   const validarPersona = () => {
     const faltantes = [];
     if (!form.nombre.trim()) faltantes.push('NOMBRE');
@@ -112,11 +91,11 @@ function Personas({ onPersonaChange }) {
       if (modoEdicion) {
         const { error } = await supabase
           .from('personas')
-          .update({ 
-            nombre: form.nombre.trim(), 
-            email: form.email.trim() || null, 
-            telefono: form.telefono.trim() || null, 
-            cargo: form.cargo.trim() || null 
+          .update({
+            nombre: form.nombre.trim(),
+            email: form.email.trim() || null,
+            telefono: form.telefono.trim() || null,
+            cargo: form.cargo.trim() || null
           })
           .eq('id', form.id);
         if (error) throw error;
@@ -124,11 +103,11 @@ function Personas({ onPersonaChange }) {
       } else {
         const { error } = await supabase
           .from('personas')
-          .insert([{ 
-            nombre: form.nombre.trim(), 
-            email: form.email.trim() || null, 
-            telefono: form.telefono.trim() || null, 
-            cargo: form.cargo.trim() || null 
+          .insert([{
+            nombre: form.nombre.trim(),
+            email: form.email.trim() || null,
+            telefono: form.telefono.trim() || null,
+            cargo: form.cargo.trim() || null
           }]);
         if (error) throw error;
         setMensaje({ tipo: 'success', texto: 'Persona creada correctamente.' });
@@ -149,6 +128,10 @@ function Personas({ onPersonaChange }) {
   };
 
   const eliminarPersona = async (id) => {
+    if (!esAdmin) {
+      alert('⛔ Solo un administrador puede eliminar personas.');
+      return;
+    }
     if (!window.confirm('¿Estás seguro de eliminar esta persona? Se desasignarán los equipos.')) return;
 
     try {
@@ -161,22 +144,8 @@ function Personas({ onPersonaChange }) {
       await cargarPersonas();
       refrescarApp();
       alert('Persona eliminada correctamente.');
-      if (personaSeleccionada === id) {
-        setPersonaSeleccionada(null);
-        setEquiposPorPersona([]);
-      }
     } catch (err) {
       alert('Error al eliminar: ' + err.message);
-    }
-  };
-
-  const handleSeleccionarPersona = (persona) => {
-    if (personaSeleccionada === persona.id) {
-      setPersonaSeleccionada(null);
-      setEquiposPorPersona([]);
-    } else {
-      setPersonaSeleccionada(persona.id);
-      cargarEquiposPorPersona(persona.id);
     }
   };
 
@@ -233,98 +202,50 @@ function Personas({ onPersonaChange }) {
                   <th className="border-0">Email</th>
                   <th className="border-0">Teléfono</th>
                   <th className="border-0">Cargo</th>
-                  <th className="border-0 text-center">Equipos</th>
                   <th className="border-0 text-end">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {personas.map(persona => {
-                  const isSelected = personaSeleccionada === persona.id;
-                  return (
-                    <tr key={persona.id} className="table-row-soft">
-                      <td className="fw-bold text-dark" onClick={() => handleSeleccionarPersona(persona)} style={{ cursor: 'pointer' }}>{persona.nombre}</td>
-                      <td onClick={() => handleSeleccionarPersona(persona)} style={{ cursor: 'pointer' }}>{persona.email || '—'}</td>
-                      <td onClick={() => handleSeleccionarPersona(persona)} style={{ cursor: 'pointer' }}>{persona.telefono || '—'}</td>
-                      <td onClick={() => handleSeleccionarPersona(persona)} style={{ cursor: 'pointer' }}>{persona.cargo || '—'}</td>
-                      <td className="text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleSeleccionarPersona(persona)}
-                          className="btn btn-sm btn-info text-white rounded-pill px-3"
-                          style={{ fontSize: '12px' }}
-                          title={isSelected ? 'Ocultar los equipos de esta persona' : 'Ver los equipos asignados a esta persona'}
-                        >
-                          {isSelected ? '👀 Ver' : '📋 Ver'}
-                        </button>
-                      </td>
-                      <td className="text-end">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); abrirEditar(persona); }}
-                          className="btn btn-sm btn-link text-warning p-1 me-2"
-                          title="Editar esta persona"
-                        >
-                          <i className="bi bi-pencil fs-5"></i>
-                        </button>
+                {personas.map(persona => (
+                  <tr key={persona.id} className="table-row-soft">
+                    <td className="fw-bold text-dark">{persona.nombre}</td>
+                    <td>{persona.email || '—'}</td>
+                    <td>{persona.telefono || '—'}</td>
+                    <td>{persona.cargo || '—'}</td>
+                    <td className="text-end">
+                      <button
+                        onClick={() => onGestionar(persona.id)}
+                        className="btn btn-sm btn-outline-success rounded-pill px-3 me-2"
+                        title="Gestionar equipo activo e historial"
+                      >
+                        Gestionar
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); abrirEditar(persona); }}
+                        className="btn btn-sm btn-link text-warning p-1 me-2"
+                        title="Editar esta persona"
+                      >
+                        <i className="bi bi-pencil fs-5"></i>
+                      </button>
+                      {esAdmin && (
                         <button
                           onClick={(e) => { e.stopPropagation(); eliminarPersona(persona.id); }}
                           className="btn btn-sm btn-link text-danger p-1"
-                          title="Eliminar esta persona (desasigna sus equipos)"
+                          title="Eliminar esta persona (solo administrador)"
                         >
                           <i className="bi bi-trash3 fs-5"></i>
                         </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
-      {personaSeleccionada && (
-        <div className="card border-0 rounded-4 bg-white p-4 shadow-sm">
-          <h5 className="fw-bold text-dark mb-3">
-            <i className="bi bi-pc-display text-success me-2"></i>
-            Equipos asignados a <span className="text-success">{personas.find(p => p.id === personaSeleccionada)?.nombre}</span>
-          </h5>
-          {equiposPorPersona.length === 0 ? (
-            <p className="text-muted text-center py-3">No hay equipos asignados a esta persona.</p>
-          ) : (
-            <div className="table-responsive">
-              <table className="table align-middle table-sm">
-                <thead>
-                  <tr className="text-muted small fw-semibold" style={{ fontSize: '10px', textTransform: 'uppercase' }}>
-                    <th>Código</th>
-                    <th>Tipo</th>
-                    <th>Marca</th>
-                    <th>Modelo</th>
-                    <th>Estado</th>
-                    <th>Fecha Asignación</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {equiposPorPersona.map(equipo => (
-                    <tr key={equipo.id} className="table-row-soft">
-                      <td className="fw-bold text-primary small">{equipo.codigo_inventario}</td>
-                      <td>{equipo.tipo || '—'}</td>
-                      <td>{equipo.marca || '—'}</td>
-                      <td>{equipo.modelo || '—'}</td>
-                      <td>
-                        <span className={`badge ${equipo.estado === 'Operativo' ? 'bg-success' : equipo.estado === 'Mantenimiento' ? 'bg-warning text-dark' : 'bg-danger'} px-2 py-1`}>
-                          {equipo.estado}
-                        </span>
-                      </td>
-                      <td>{equipo.fecha_asignacion ? new Date(equipo.fecha_asignacion).toLocaleDateString('es-HN') : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
+      {/* MODAL: Nueva / Editar Persona */}
       {mostrarModal && (
         <div className="modal-overlay" onClick={cerrarModal}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
@@ -465,6 +386,9 @@ function Personas({ onPersonaChange }) {
           justify-content: space-between;
           align-items: center;
           background: #f8fafc;
+        }
+        .modal-header-desasignar {
+          background: #f1f5f9;
         }
         .custom-input {
           background-color: #f6faf8 !important;
