@@ -65,6 +65,9 @@ function App() {
   const [enviandoDesasignacion, setEnviandoDesasignacion] = useState(false);
   const [qrEquipoCodigo, setQrEquipoCodigo] = useState(null);
   const [filtroReporte, setFiltroReporte] = useState('todos');
+  // ===== Filtros de la tabla "Equipos" (misma idea que el filtro de Reportes) =====
+  const [filtroTablaUbicacion, setFiltroTablaUbicacion] = useState('todos'); // 'todos' | 'lab-<id>' | 'area-<id>'
+  const [filtroTablaEstado, setFiltroTablaEstado] = useState('todos'); // 'todos' | 'Operativo' | 'Mantenimiento' | 'Dañado'
   const [navbarOpen, setNavbarOpen] = useState(false);
   const [laboratorioSeleccionado, setLaboratorioSeleccionado] = useState(null);
   const [areaSeleccionada, setAreaSeleccionada] = useState(null);
@@ -793,7 +796,7 @@ alternateRowStyles: {
   4:  { cellWidth: 22 },  // Modelo
   5:  { cellWidth: 22 },  // Serie
   6:  { cellWidth: 28 },  // Procesador
-  7:  { cellWidth: 16 },  // RAM ← más ancho (antes 12)
+  7:  { cellWidth: 16 },  // RAM ← más ancho (antes 12)-
   8:  { cellWidth: 16 },  // Disco
   9:  { cellWidth: 12 },  // Año
   10: { cellWidth: 20 },  // Estado ← más ancho (antes 16)
@@ -827,6 +830,25 @@ margin: { left: 8, right: 8, bottom: 16 },
       equiposMostrar = equiposMostrar.filter(c => c.persona_id === filtroPersonaId);
     }
 
+    // Filtros propios de la vista principal "Equipos" (ubicación y estado).
+    // Solo aplican cuando la tabla se llama sin un filtro de contexto ya
+    // impuesto desde afuera (Laboratorios, Administrativo o Personas).
+    const esVistaPrincipal = !filtroLabId && !filtroAreaId && !filtroPersonaId;
+    if (esVistaPrincipal) {
+      if (filtroTablaUbicacion !== 'todos') {
+        if (filtroTablaUbicacion.startsWith('lab-')) {
+          const labId = parseInt(filtroTablaUbicacion.replace('lab-', ''));
+          equiposMostrar = equiposMostrar.filter(c => c.laboratorio_id === labId);
+        } else if (filtroTablaUbicacion.startsWith('area-')) {
+          const arId = parseInt(filtroTablaUbicacion.replace('area-', ''));
+          equiposMostrar = equiposMostrar.filter(c => c.area_id === arId);
+        }
+      }
+      if (filtroTablaEstado !== 'todos') {
+        equiposMostrar = equiposMostrar.filter(c => c.estado === filtroTablaEstado);
+      }
+    }
+
     return (
       <div className="card border-0 rounded-4 bg-white p-3 p-md-4 shadow-sm">
         <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 mb-md-4 gap-2 gap-md-3">
@@ -843,6 +865,52 @@ margin: { left: 8, right: 8, bottom: 16 },
             </p>
           </div>
           <div className="d-flex gap-2 align-items-center flex-wrap">
+            {esVistaPrincipal && (
+              <>
+                <select
+                  className="form-select form-select-sm rounded-3 border"
+                  style={{ maxWidth: '190px', fontSize: '12px' }}
+                  value={filtroTablaUbicacion}
+                  onChange={(e) => setFiltroTablaUbicacion(e.target.value)}
+                  title="Filtrar por ubicación"
+                >
+                  <option value="todos">📍 Todas las ubicaciones</option>
+                  <optgroup label="Laboratorios">
+                    {dashboardData.laboratorios.map(lab => (
+                      <option key={`lab-${lab.id}`} value={`lab-${lab.id}`}>{lab.nombre}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Áreas Administrativas">
+                    {dashboardData.areas.map(area => (
+                      <option key={`area-${area.id}`} value={`area-${area.id}`}>{area.nombre}</option>
+                    ))}
+                  </optgroup>
+                </select>
+                <select
+                  className="form-select form-select-sm rounded-3 border"
+                  style={{ maxWidth: '150px', fontSize: '12px' }}
+                  value={filtroTablaEstado}
+                  onChange={(e) => setFiltroTablaEstado(e.target.value)}
+                  title="Filtrar por estado"
+                >
+                  <option value="todos">Todos los estados</option>
+                  <option value="Operativo">🟢 Operativo</option>
+                  <option value="Mantenimiento">🟡 Mantenimiento</option>
+                  <option value="Dañado">🔴 Dañado</option>
+                </select>
+                {(filtroTablaUbicacion !== 'todos' || filtroTablaEstado !== 'todos') && (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-light border rounded-3"
+                    style={{ fontSize: '12px' }}
+                    onClick={() => { setFiltroTablaUbicacion('todos'); setFiltroTablaEstado('todos'); }}
+                    title="Limpiar filtros"
+                  >
+                    <i className="bi bi-x-circle me-1"></i>Limpiar
+                  </button>
+                )}
+              </>
+            )}
             <div className="input-group rounded-3 overflow-hidden search-box" style={{ maxWidth: '240px', height: '38px' }}>
               <span className="input-group-text bg-white border-0"><i className="bi bi-search text-muted"></i></span>
               <input type="text" className="form-control border-0 ps-0 text-dark small" placeholder="Buscar..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ fontSize: '13px' }} />
