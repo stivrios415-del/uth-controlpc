@@ -277,7 +277,7 @@ function EscanerQR({ onVerHistorial }) {
 
               <div className="d-flex gap-2 mt-4">
                 <button className="btn btn-outline-secondary w-100 fw-semibold" onClick={reiniciarEscaneo}>
-                  <i className="bi bi-qr-code-scan me-2"></i>Escanear otro
+                  <i className="bi bi-qr-code-me-2"></i>Escanear otro
                 </button>
                 {resultado.tipo === 'computadora' && onVerHistorial && (
                   <button
@@ -360,6 +360,24 @@ function EscanerQR({ onVerHistorial }) {
           color: #1f2937;
           font-weight: 500;
         }
+          /* 2. Asegura que el botón de la imagen sea visible y tenga prioridad */
+#lector-qr a[id*="scan_image"] {
+  display: inline-block !important; /* <--- Esto lo vuelve a traer a la vida */
+  width: 100% !important;
+  max-width: 240px !important;
+  background-color: transparent !important;
+  color: #10b981 !important;
+  border: 2px solid #10b981 !important;
+  border-radius: 10px !important;
+  padding: 8px 18px !important;
+  font-weight: 600 !important;
+  font-size: 0.85rem !important;
+  margin: 12px 0 0 0 !important;
+  text-decoration: none !important;
+  text-align: center !important;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
 
         .resultado-qr-anim {
           animation: apareceQR 0.3s ease;
