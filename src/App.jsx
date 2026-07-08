@@ -16,6 +16,7 @@ import EscanerQR from './EscanerQR';
 import HistorialPC from './historial';
 import EditarEquipo from './EditarEquipo';
 import { supabase } from './supabaseClient';
+import PersonaDetalle from './PersonasDetalle';
 import logo from './logo.png';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -40,6 +41,7 @@ function App() {
   const [usuario, setUsuario] = useState(null);
   const [vistaActual, setVistaActual] = useState('equipos');
   const [computadoras, setComputadoras] = useState([]);
+  const [personaGestionId, setPersonaGestionId] = useState(null);
   const [dashboardData, setDashboardData] = useState({
     codigo_automatico: 'INV-0001',
     laboratorios: [],
@@ -57,6 +59,10 @@ function App() {
   const [equipoAEliminarId, setEquipoAEliminarId] = useState(null);
   const [motivoBaja, setMotivoBaja] = useState('');
   const [enviandoBaja, setEnviandoBaja] = useState(false);
+  // ===== DESASIGNAR EQUIPO DE UNA PERSONA (sin eliminarlo) =====
+  const [equipoADesasignarId, setEquipoADesasignarId] = useState(null);
+  const [motivoDesasignacion, setMotivoDesasignacion] = useState('');
+  const [enviandoDesasignacion, setEnviandoDesasignacion] = useState(false);
   const [qrEquipoCodigo, setQrEquipoCodigo] = useState(null);
   const [filtroReporte, setFiltroReporte] = useState('todos');
   const [navbarOpen, setNavbarOpen] = useState(false);
@@ -122,7 +128,7 @@ function App() {
           laboratorios ( id, nombre, edificio )
         `)
         .eq('eliminado', false)
-        .order('id', { ascending: false });
+        .order('id', { ascending: true });
 
       if (compError) throw compError;
 
@@ -277,6 +283,26 @@ function App() {
       areaId = parseInt(form.ubicacion.replace('area-', ''));
     }
 
+    // Verificación de último momento contra la base de datos (no solo la lista en pantalla),
+    // por si otra persona asignó a este mismo colaborador justo antes de que guardaras.
+    if (areaId && form.persona_id) {
+      const { data: equipoExistente } = await supabase
+        .from('computadoras')
+        .select('id, codigo_inventario')
+        .eq('persona_id', parseInt(form.persona_id))
+        .eq('eliminado', false)
+        .limit(1);
+
+      if (equipoExistente && equipoExistente.length > 0) {
+        alert(
+          `⚠️ Esta persona ya tiene un equipo activo asignado (${equipoExistente[0].codigo_inventario}).\n\n` +
+          'No se puede asignar un segundo equipo hasta liberar el actual.'
+        );
+        setSubmitting(false);
+        return;
+      }
+    }
+
     const payload = {
       // No enviamos codigo_inventario: lo genera automáticamente el trigger
       // de Supabase usando una secuencia atómica (evita duplicados si varias
@@ -393,6 +419,78 @@ function App() {
     }
   };
 
+  // ==================== DESASIGNAR EQUIPO DE UNA PERSONA ====================
+  // Esto NO elimina el equipo: solo libera a la persona asignada (persona_id y
+  // fecha_asignacion vuelven a null), para que el equipo quede disponible de
+  // nuevo. Se exige un motivo y queda registrado en el Historial del equipo.
+
+  const abrirConfirmarDesasignar = (id) => {
+    if (!esAdmin) {
+      alert('⛔ Solo un administrador puede desasignar equipos de una persona.');
+      return;
+    }
+    setEquipoADesasignarId(id);
+    setMotivoDesasignacion('');
+  };
+
+  const cancelarDesasignar = () => {
+    if (enviandoDesasignacion) return;
+    setEquipoADesasignarId(null);
+    setMotivoDesasignacion('');
+  };
+
+  const confirmarDesasignarEquipo = async () => {
+    if (!esAdmin) {
+      alert('⛔ Solo un administrador puede desasignar equipos de una persona.');
+      setEquipoADesasignarId(null);
+      return;
+    }
+    if (!motivoDesasignacion.trim()) {
+      alert('⚠️ Debes indicar el motivo de la desasignación.');
+      return;
+    }
+    if (enviandoDesasignacion) return;
+    setEnviandoDesasignacion(true);
+
+    const id = equipoADesasignarId;
+    const motivo = motivoDesasignacion.trim();
+    const equipo = computadoras.find(c => c.id === id);
+    const personaAnterior = dashboardData.personas.find(p => p.id === equipo?.persona_id)?.nombre || 'persona desconocida';
+
+    try {
+      // Deja constancia en la bitácora del equipo
+      const { error: histError } = await supabase
+        .from('historial_mantenimiento')
+        .insert([{
+          computadora_id: id,
+          descripcion_problema: `Equipo desasignado de ${personaAnterior} por ${usuario?.nombre || 'usuario desconocido'}.\nMotivo: ${motivo}`,
+          costo: 0,
+        }]);
+      if (histError) {
+        console.warn('No se pudo registrar la desasignación en la bitácora:', histError);
+      }
+
+      const { error } = await supabase
+        .from('computadoras')
+        .update({
+          persona_id: null,
+          fecha_asignacion: null,
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setEquipoADesasignarId(null);
+      setMotivoDesasignacion('');
+      await cargarInventario();
+      alert('✅ Equipo desasignado correctamente. Queda disponible para asignar de nuevo.');
+    } catch (error) {
+      alert('Error al desasignar: ' + error.message);
+    } finally {
+      setEnviandoDesasignacion(false);
+    }
+  };
+
   const handleLogout = () => {
     supabase.auth.signOut();
     setUsuario(null);
@@ -423,6 +521,16 @@ function App() {
       (dashboardData.personas.find(p => p.id === comp.persona_id)?.nombre || '').toLowerCase().includes(query)
     );
   }, [computadoras, busqueda, dashboardData.personas]);
+
+  // Personas que YA tienen un equipo activo asignado (para no permitir duplicados).
+  // Se calcula sobre "computadoras" que solo trae equipos con eliminado=false.
+  const personasOcupadas = useMemo(() => {
+    const ids = new Set();
+    computadoras.forEach(c => {
+      if (c.persona_id) ids.add(c.persona_id);
+    });
+    return ids;
+  }, [computadoras]);
 
   const datosGrafico = useMemo(() => ({
     labels: ['Operativos', 'Mantenimiento', 'Dañados'],
@@ -456,9 +564,11 @@ function App() {
       return;
     }
 
+    // Si el admin elige un laboratorio específico, se muestra su nombre.
+    // Si elige "Todos", en vez de dejarlo vacío, decimos "EN GENERAL".
     const ubicacionNombre = filtroReporte !== 'todos'
       ? (dashboardData.laboratorios.find(l => l.id === parseInt(filtroReporte))?.nombre || '')
-      : '';
+      : 'EN GENERAL';
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Inventario');
@@ -591,76 +701,117 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
-  const exportarPDF = () => {
-    if (computadorasFiltradas.length === 0) {
-      alert('No hay datos para exportar.');
-      return;
+const exportarPDF = () => {
+  if (computadorasFiltradas.length === 0) {
+    alert('No hay datos para exportar.');
+    return;
+  }
+
+  const equiposPdf = filtroReporte !== 'todos'
+    ? computadorasFiltradas.filter(c => c.laboratorio_id === parseInt(filtroReporte))
+    : computadorasFiltradas;
+
+  if (equiposPdf.length === 0) {
+    alert('No hay equipos para ese laboratorio.');
+    return;
+  }
+
+  const ubicacionNombrePdf = filtroReporte !== 'todos'
+    ? (dashboardData.laboratorios.find(l => l.id === parseInt(filtroReporte))?.nombre || '')
+    : 'EN GENERAL';
+
+  const doc = new jsPDF('landscape', 'mm', 'a4');
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  doc.setFontSize(16);
+  doc.text('INVENTARIO DE EQUIPOS - UTH CONTROL-PC', pageWidth / 2, 15, { align: 'center' });
+  doc.setFontSize(11);
+  doc.text(`Ubicación: ${ubicacionNombrePdf}`, pageWidth / 2, 22, { align: 'center' });
+  doc.setFontSize(10);
+  doc.text(`Fecha: ${new Date().toLocaleDateString()}   |   Total de equipos: ${equiposPdf.length}`, pageWidth / 2, 28, { align: 'center' });
+
+  const headers = [[
+    'Nº', 'Código', 'Tipo', 'Marca', 'Modelo', 'Serie',
+    'Procesador', 'RAM', 'Disco', 'Año', 'Estado', 'Laboratorio',
+    'Área', 'Asignado a', 'Fecha Asig.'
+  ]];
+
+  const rows = equiposPdf.map((comp, idx) => {
+    const areaNombre = dashboardData.areas?.find(a => a.id === comp.area_id)?.nombre || '';
+    const personaNombre = dashboardData.personas?.find(p => p.id === comp.persona_id)?.nombre || '';
+    const fechaAsig = comp.fecha_asignacion
+      ? new Date(comp.fecha_asignacion).toLocaleDateString('es-HN')
+      : '';
+    return [
+      idx + 1,
+      comp.codigo_inventario,
+      comp.tipo || '',
+      comp.marca || '',
+      comp.modelo || '',
+      comp.numero_serie || '',
+      comp.procesador || '',
+      comp.ram_gb ? `${comp.ram_gb}GB` : '',
+      comp.disco || '',
+      comp.ano || '',
+      comp.estado,
+      comp.nombre_laboratorio || 'SIN ASIGNAR',
+      areaNombre || '—',
+      personaNombre || '—',
+      fechaAsig || '—'
+    ];
+  });
+
+  autoTable(doc, {
+    head: headers,
+    body: rows,
+    startY: 34,
+    styles: {
+  fontSize: 8,
+  cellPadding: 2,
+  valign: 'middle',
+  overflow: 'linebreak',
+  lineColor: [220, 226, 231],
+  lineWidth: 0.1,
+},
+headStyles: {
+  fillColor: [6, 95, 70],
+  textColor: [255, 255, 255],
+  fontSize: 9,
+  halign: 'center',
+  cellPadding: 3,
+},
+bodyStyles: {
+  minCellHeight: 8,
+},
+alternateRowStyles: {
+  fillColor: [246, 250, 248],
+},columnStyles: {
+  0:  { cellWidth: 10  },  // Nº
+  1:  { cellWidth: 18 },  // Código
+  2:  { cellWidth: 14 },  // Tipo
+  3:  { cellWidth: 16 },  // Marca
+  4:  { cellWidth: 22 },  // Modelo
+  5:  { cellWidth: 22 },  // Serie
+  6:  { cellWidth: 28 },  // Procesador
+  7:  { cellWidth: 16 },  // RAM ← más ancho (antes 12)
+  8:  { cellWidth: 16 },  // Disco
+  9:  { cellWidth: 12 },  // Año
+  10: { cellWidth: 20 },  // Estado ← más ancho (antes 16)
+  11: { cellWidth: 24 },  // Laboratorio ← más ancho (antes 18)
+  12: { cellWidth: 18 },  // Área
+  13: { cellWidth: 24 },  // Asignado a ← más ancho (antes 18)
+  14: { cellWidth: 20 },  // Fecha Asig.
+},
+margin: { left: 8, right: 8, bottom: 16 },
+    margin: { left: 8, right: 8, bottom: 16 },
+    didDrawPage: function () {
+      doc.setFontSize(8);
+      doc.text('Generado por UTH CONTROL-PC', pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
     }
+  });
 
-    const doc = new jsPDF('landscape', 'mm', 'a4');
-    const pageWidth = doc.internal.pageSize.getWidth();
-
-    doc.setFontSize(16);
-    doc.text('INVENTARIO DE EQUIPOS - UTH CONTROL-PC', pageWidth / 2, 15, { align: 'center' });
-    doc.setFontSize(10);
-    doc.text(`Fecha: ${new Date().toLocaleDateString()}`, pageWidth / 2, 22, { align: 'center' });
-    doc.text(`Total de equipos: ${computadorasFiltradas.length}`, pageWidth / 2, 28, { align: 'center' });
-
-    const headers = [['Código', 'Tipo', 'Marca', 'Modelo', 'Serie', 'Procesador', 'RAM (GB)', 'Disco', 'Año', 'Estado', 'Laboratorio', 'Área', 'Asignado a', 'Fecha Asignación']];
-    const rows = computadorasFiltradas.map(comp => {
-      const areaNombre = dashboardData.areas?.find(a => a.id === comp.area_id)?.nombre || '';
-      const personaNombre = dashboardData.personas?.find(p => p.id === comp.persona_id)?.nombre || '';
-      const fechaAsig = comp.fecha_asignacion ? new Date(comp.fecha_asignacion).toLocaleDateString('es-HN') : '';
-      return [
-        comp.codigo_inventario,
-        comp.tipo || '',
-        comp.marca || '',
-        comp.modelo || '',
-        comp.numero_serie || '',
-        comp.procesador || '',
-        comp.ram_gb || '',
-        comp.disco || '',
-        comp.ano || '',
-        comp.estado,
-        comp.nombre_laboratorio || 'SIN ASIGNAR',
-        areaNombre,
-        personaNombre,
-        fechaAsig
-      ];
-    });
-
-    autoTable(doc, {
-      head: headers,
-      body: rows,
-      startY: 35,
-      styles: { fontSize: 8, cellPadding: 1.5 },
-      headStyles: { fillColor: [6, 95, 70], textColor: [255, 255, 255], fontSize: 9 },
-      columnStyles: {
-        0: { cellWidth: 16 },
-        1: { cellWidth: 14 },
-        2: { cellWidth: 16 },
-        3: { cellWidth: 16 },
-        4: { cellWidth: 18 },
-        5: { cellWidth: 20 },
-        6: { cellWidth: 12 },
-        7: { cellWidth: 16 },
-        8: { cellWidth: 12 },
-        9: { cellWidth: 16 },
-        10: { cellWidth: 16 },
-        11: { cellWidth: 18 },
-        12: { cellWidth: 16 },
-        13: { cellWidth: 16 },
-      },
-      margin: { left: 10, right: 10 },
-      didDrawPage: function () {
-        doc.setFontSize(8);
-        doc.text('Generado por UTH CONTROL-PC', pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
-      }
-    });
-
-    doc.save(`Inventario_UTH_${new Date().toISOString().slice(0,10)}.pdf`);
-  };
-
+  doc.save(`Inventario_UTH_${new Date().toISOString().slice(0,10)}.pdf`);
+};
   // ============================================================
   // FUNCIÓN PARA RENDERIZAR SOLO LA TABLA (con filtros)
   // ============================================================
@@ -703,6 +854,7 @@ function App() {
           <table className="table align-middle" style={{ borderCollapse: 'separate', borderSpacing: '0 6px' }}>
             <thead>
               <tr className="text-muted small tracking-wider" style={{ fontSize: '10px', borderBottom: '1px solid #f1f5f9' }}>
+                <th className="pb-2 border-0 ps-2 ps-md-3" style={{ width: '40px' }}>Nº</th>
                 <th className="pb-2 border-0 ps-2 ps-md-3">CÓDIGO</th>
                 <th className="pb-2 border-0">TIPO</th>
                 <th className="pb-2 border-0">MARCA</th>
@@ -724,7 +876,7 @@ function App() {
                   </td>
                 </tr>
               ) : (
-                equiposMostrar.map(comp => {
+               equiposMostrar.map((comp, index) => {
                   const areaNombre = dashboardData.areas?.find(a => a.id === comp.area_id)?.nombre || '';
                   const personaNombre = dashboardData.personas?.find(p => p.id === comp.persona_id)?.nombre || '';
                   return (
@@ -742,6 +894,9 @@ function App() {
                           {comp.estado === 'Operativo' && '🟢'} {comp.estado === 'Mantenimiento' && '🟡'} {comp.estado === 'Dañado' && '🔴'} {comp.estado}
                         </span>
                       </td>
+                      <td className="ps-2 ps-md-3 rounded-start-3 border-0 align-middle text-center fw-bold" style={{ fontSize: '12px', color: '#6b7280' }}>
+  {index + 1}
+</td>
                       <td className="border-0 text-dark fw-medium d-none d-lg-table-cell" style={{ fontSize: '11px' }}>
                         <i className="bi bi-building me-1 text-muted"></i>{comp.nombre_laboratorio || 'SIN ASIGNAR'}
                       </td>
@@ -761,6 +916,11 @@ function App() {
                         <button onClick={() => setPcSeleccionadaId(comp.id)} className="btn btn-sm btn-link text-primary p-1 rounded-3 me-1" title="Historial">
                           <i className="bi bi-journal-text fs-6"></i>
                         </button>
+                        {comp.persona_id && esAdmin && (
+                          <button onClick={() => abrirConfirmarDesasignar(comp.id)} className="btn btn-sm btn-link text-secondary p-1 rounded-3 me-1" title="Desasignar de esta persona (solo administrador)">
+                            <i className="bi bi-person-dash fs-6"></i>
+                          </button>
+                        )}
                         {esAdmin && (
                           <button onClick={() => abrirConfirmarEliminar(comp.id)} className="btn btn-sm btn-link text-danger p-1 hover-bg-danger rounded-3" title="Eliminar (solo administrador)">
                             <i className="bi bi-trash3 fs-6"></i>
@@ -970,11 +1130,15 @@ function App() {
                     <label className="form-label text-secondary small fw-semibold">ASIGNAR A</label>
                     <select name="persona_id" className="form-select app-input rounded-3 py-2" value={form.persona_id} onChange={handleInputChange}>
                       <option value="">⚠️ -- Sin Asignar --</option>
-                      {dashboardData.personas.map(persona => (
-                        <option key={persona.id} value={persona.id}>👤 {persona.nombre}</option>
-                      ))}
+                      {dashboardData.personas
+                        .filter(persona => !personasOcupadas.has(persona.id))
+                        .map(persona => (
+                          <option key={persona.id} value={persona.id}>👤 {persona.nombre}</option>
+                        ))}
                     </select>
-                    <small className="text-muted d-block mt-1">Al seleccionar, se registrará la fecha actual.</small>
+                    <small className="text-muted d-block mt-1">
+                      Al seleccionar, se registrará la fecha actual. Solo se muestran personas sin equipo activo asignado.
+                    </small>
                   </div>
                 )}
                 {form.ubicacion.startsWith('lab-') && (
@@ -1033,7 +1197,7 @@ function App() {
                   value={filtroReporte}
                   onChange={(e) => setFiltroReporte(e.target.value)}
                 >
-                  <option value="todos">-- Todos --</option>
+                  <option value="todos">-- Todos (en general) --</option>
                   {dashboardData.laboratorios.map(lab => (
                     <option key={lab.id} value={lab.id}>
                       {lab.nombre} ({lab.edificio})
@@ -1075,7 +1239,7 @@ function App() {
       case 'laboratorios':
         return (
           <>
-            <Laboratorios onLaboratorioChange={cargarInventario} />
+            <Laboratorios onLaboratorioChange={cargarInventario} esAdmin={esAdmin} />
             {laboratorioSeleccionado && (
               <>
                 <hr className="my-4" />
@@ -1091,7 +1255,7 @@ function App() {
       case 'admin':
         return (
           <>
-            <Areas onAreaChange={cargarInventario} />
+            <Areas onAreaChange={cargarInventario} esAdmin={esAdmin} />
             {areaSeleccionada && (
               <>
                 <hr className="my-4" />
@@ -1104,26 +1268,32 @@ function App() {
           </>
         );
 
-      case 'personas':
-        // Módulo exclusivo de administradores
-        if (!esAdmin) return renderEquipos();
-        return (
-          <>
-            <Personas onPersonaChange={cargarInventario} />
-            {personaSeleccionada && (
-              <>
-                <hr className="my-4" />
-                <h5 className="fw-bold text-dark mb-3">
-                  Equipos asignados a {dashboardData.personas.find(p => p.id === personaSeleccionada)?.nombre || 'persona seleccionada'}
-                </h5>
-                {renderTablaEquipos(null, null, personaSeleccionada)}
-              </>
-            )}
-          </>
-        );
+     case 'personas':
+  if (!esAdmin) return renderEquipos();
+
+  if (personaGestionId) {
+    return (
+      <PersonaDetalle
+        personaId={personaGestionId}
+        onVolver={() => setPersonaGestionId(null)}
+        esAdmin={esAdmin}
+        personas={dashboardData.personas}
+        personasOcupadas={personasOcupadas}
+        onPersonaChange={cargarInventario}
+      />
+    );
+  }
+
+  return (
+    <Personas
+      onPersonaChange={cargarInventario}
+      esAdmin={esAdmin}
+      onGestionar={setPersonaGestionId}
+    />
+  );
 
       case 'extras':
-        return <Extras />;
+        return <Extras esAdmin={esAdmin} />;
 
       case 'catalogos':
         // Módulo exclusivo de administradores
@@ -1372,6 +1542,75 @@ function App() {
         </div>
       )}
 
+      {/* MODAL: Desasignar equipo de una persona (con motivo obligatorio) */}
+      {equipoADesasignarId && esAdmin && (
+        <div className="modal-overlay" onClick={cancelarDesasignar}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header-custom modal-header-desasignar">
+              <h6 className="fw-bold m-0 text-secondary">
+                <i className="bi bi-person-dash-fill me-2"></i>
+                Desasignar equipo
+              </h6>
+              <button type="button" className="btn-close shadow-none" onClick={cancelarDesasignar} disabled={enviandoDesasignacion}></button>
+            </div>
+
+            <div className="p-4">
+              <p className="text-secondary small mb-3">
+                El equipo <strong>{computadoras.find(c => c.id === equipoADesasignarId)?.codigo_inventario}</strong> se
+                liberará de{' '}
+                <strong>
+                  {dashboardData.personas.find(p => p.id === computadoras.find(c => c.id === equipoADesasignarId)?.persona_id)?.nombre || 'la persona asignada'}
+                </strong>. El equipo <strong>no se elimina</strong>: solo queda disponible para asignarse a alguien más,
+                y esta acción quedará registrada en su Historial.
+              </p>
+
+              <label className="form-label fw-semibold text-secondary small">
+                Motivo de la desasignación <span className="text-danger">*</span>
+              </label>
+              <textarea
+                className="form-control custom-input"
+                rows="3"
+                placeholder="Ej: Cambio de puesto, fin de contrato, el equipo pasa a otra persona, se traslada de área..."
+                value={motivoDesasignacion}
+                onChange={(e) => setMotivoDesasignacion(e.target.value)}
+                maxLength={200}
+                autoFocus
+                disabled={enviandoDesasignacion}
+              />
+              <small className="text-muted d-block mt-1">{motivoDesasignacion.length}/200</small>
+
+              <div className="d-flex gap-2 mt-4">
+                <button
+                  type="button"
+                  className="btn btn-light border w-100 py-2 text-secondary fw-semibold"
+                  onClick={cancelarDesasignar}
+                  disabled={enviandoDesasignacion}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary w-100 py-2 fw-semibold"
+                  onClick={confirmarDesasignarEquipo}
+                  disabled={enviandoDesasignacion || !motivoDesasignacion.trim()}
+                >
+                  {enviandoDesasignacion ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                      Desasignando...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-person-dash me-2"></i>Confirmar Desasignación
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: Código QR */}
       {qrEquipoCodigo && (
         <CodigoQR codigo={qrEquipoCodigo} onClose={() => setQrEquipoCodigo(null)} />
@@ -1473,6 +1712,9 @@ function App() {
           justify-content: space-between;
           align-items: center;
           background: #fdf2f2;
+        }
+        .modal-header-desasignar {
+          background: #f1f5f9;
         }
         .custom-input {
           background-color: #f6faf8 !important;
