@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
@@ -13,11 +14,14 @@ import Catalogos from './Catalogos';
 import Papelera from './Papelera';
 import CodigoQR from './CodigoQR';
 import EscanerQR from './EscanerQR';
+import BotonVoz from './BotonVoz';
 import HistorialPC from './historial';
 import EditarEquipo from './EditarEquipo';
 import { supabase } from './supabaseClient';
 import PersonaDetalle from './PersonasDetalle';
 import logo from './logo.png';
+import RegistroPorVoz from './RegistroporVoz';
+
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -911,9 +915,12 @@ margin: { left: 8, right: 8, bottom: 16 },
                 )}
               </>
             )}
-            <div className="input-group rounded-3 overflow-hidden search-box" style={{ maxWidth: '240px', height: '38px' }}>
+            <div className="input-group rounded-3 overflow-hidden search-box" style={{ maxWidth: '280px', height: '38px' }}>
               <span className="input-group-text bg-white border-0"><i className="bi bi-search text-muted"></i></span>
-              <input type="text" className="form-control border-0 ps-0 text-dark small" placeholder="Buscar..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ fontSize: '13px' }} />
+              <input type="text" className="form-control border-0 ps-0 text-dark small" placeholder="Buscar o habla..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ fontSize: '13px' }} />
+              <span className="bg-white border-0 d-flex align-items-center pe-2">
+                <BotonVoz onResultado={(texto) => setBusqueda(texto)} title="Buscar equipos por voz" />
+              </span>
             </div>
           </div>
         </div>
@@ -1060,13 +1067,22 @@ margin: { left: 8, right: 8, bottom: 16 },
       </div>
 
       {/* FORM Y GRÁFICO */}
+     {/* FORM Y GRÁFICO */}
       <div className="row g-3 g-md-4 mb-4">
         <div className="col-12 col-lg-7">
           <div className="card border-0 rounded-4 bg-white p-3 p-md-4 shadow-sm h-100">
-            <div className="d-flex align-items-center gap-2 mb-3 mb-md-4">
-              <div className="p-2 rounded-3 d-inline-flex" style={{ background: '#e9f9f1', color: '#059669' }}><i className="bi bi-plus-circle"></i></div>
-              <h5 className="fw-bold m-0 text-dark fs-6 fs-md-5">Registrar Nuevo Activo</h5>
+            <div className="d-flex align-items-center justify-content-between mb-3 mb-md-4 flex-wrap gap-2">
+              <div className="d-flex align-items-center gap-2">
+                <div className="p-2 rounded-3 d-inline-flex" style={{ background: '#e9f9f1', color: '#059669' }}><i className="bi bi-plus-circle"></i></div>
+                <h5 className="fw-bold m-0 text-dark fs-6 fs-md-5">Registrar Nuevo Activo</h5>
+              </div>
+              <RegistroPorVoz
+                catalogos={catalogos}
+                dashboardData={dashboardData}
+                onDatosConfirmados={(datosForm) => setForm(prev => ({ ...prev, ...datosForm }))}
+              />
             </div>
+            <form onSubmit={guardarEquipo}></form>
             <form onSubmit={guardarEquipo}>
               <div className="row g-2 g-md-3">
                 <div className="col-12 col-md-4">
