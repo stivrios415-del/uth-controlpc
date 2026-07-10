@@ -822,200 +822,196 @@ margin: { left: 8, right: 8, bottom: 16 },
   // ============================================================
   // FUNCIÓN PARA RENDERIZAR SOLO LA TABLA (con filtros)
   // ============================================================
-  const renderTablaEquipos = (filtroLabId = null, filtroAreaId = null, filtroPersonaId = null) => {
-    let equiposMostrar = computadorasFiltradas;
-    if (filtroLabId) {
-      equiposMostrar = equiposMostrar.filter(c => c.laboratorio_id === filtroLabId);
-    }
-    if (filtroAreaId) {
-      equiposMostrar = equiposMostrar.filter(c => c.area_id === filtroAreaId);
-    }
-    if (filtroPersonaId) {
-      equiposMostrar = equiposMostrar.filter(c => c.persona_id === filtroPersonaId);
-    }
+ const renderTablaEquipos = (filtroLabId = null, filtroAreaId = null, filtroPersonaId = null) => {
+  let equiposMostrar = computadorasFiltradas;
+  if (filtroLabId) {
+    equiposMostrar = equiposMostrar.filter(c => c.laboratorio_id === filtroLabId);
+  }
+  if (filtroAreaId) {
+    equiposMostrar = equiposMostrar.filter(c => c.area_id === filtroAreaId);
+  }
+  if (filtroPersonaId) {
+    equiposMostrar = equiposMostrar.filter(c => c.persona_id === filtroPersonaId);
+  }
 
-    // Filtros propios de la vista principal "Equipos" (ubicación y estado).
-    // Solo aplican cuando la tabla se llama sin un filtro de contexto ya
-    // impuesto desde afuera (Laboratorios, Administrativo o Personas).
-    const esVistaPrincipal = !filtroLabId && !filtroAreaId && !filtroPersonaId;
-    if (esVistaPrincipal) {
-      if (filtroTablaUbicacion !== 'todos') {
-        if (filtroTablaUbicacion.startsWith('lab-')) {
-          const labId = parseInt(filtroTablaUbicacion.replace('lab-', ''));
-          equiposMostrar = equiposMostrar.filter(c => c.laboratorio_id === labId);
-        } else if (filtroTablaUbicacion.startsWith('area-')) {
-          const arId = parseInt(filtroTablaUbicacion.replace('area-', ''));
-          equiposMostrar = equiposMostrar.filter(c => c.area_id === arId);
-        }
-      }
-      if (filtroTablaEstado !== 'todos') {
-        equiposMostrar = equiposMostrar.filter(c => c.estado === filtroTablaEstado);
+  const esVistaPrincipal = !filtroLabId && !filtroAreaId && !filtroPersonaId;
+  if (esVistaPrincipal) {
+    if (filtroTablaUbicacion !== 'todos') {
+      if (filtroTablaUbicacion.startsWith('lab-')) {
+        const labId = parseInt(filtroTablaUbicacion.replace('lab-', ''));
+        equiposMostrar = equiposMostrar.filter(c => c.laboratorio_id === labId);
+      } else if (filtroTablaUbicacion.startsWith('area-')) {
+        const arId = parseInt(filtroTablaUbicacion.replace('area-', ''));
+        equiposMostrar = equiposMostrar.filter(c => c.area_id === arId);
       }
     }
+    if (filtroTablaEstado !== 'todos') {
+      equiposMostrar = equiposMostrar.filter(c => c.estado === filtroTablaEstado);
+    }
+  }
 
-    return (
-      <div className="card border-0 rounded-4 bg-white p-3 p-md-4 shadow-sm">
-        <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 mb-md-4 gap-2 gap-md-3">
-          <div>
-            <h5 className="fw-bold text-dark mb-0 fs-6 fs-md-5">Equipos</h5>
-            <p className="text-muted small mb-0">
-              {filtroLabId
-                ? `Equipos en ${dashboardData.laboratorios.find(l => l.id === filtroLabId)?.nombre || 'laboratorio seleccionado'}`
-                : filtroAreaId
-                ? `Equipos en ${dashboardData.areas.find(a => a.id === filtroAreaId)?.nombre || 'área seleccionada'}`
-                : filtroPersonaId
-                ? `Equipos asignados a ${dashboardData.personas.find(p => p.id === filtroPersonaId)?.nombre || 'persona seleccionada'}`
-                : `Total filtrado: ${equiposMostrar.length} activos`}
-            </p>
-          </div>
-          <div className="d-flex gap-2 align-items-center flex-wrap">
-            {esVistaPrincipal && (
-              <>
-                <select
-                  className="form-select form-select-sm rounded-3 border"
-                  style={{ maxWidth: '190px', fontSize: '12px' }}
-                  value={filtroTablaUbicacion}
-                  onChange={(e) => setFiltroTablaUbicacion(e.target.value)}
-                  title="Filtrar por ubicación"
-                >
-                  <option value="todos">📍 Todas las ubicaciones</option>
-                  <optgroup label="Laboratorios">
-                    {dashboardData.laboratorios.map(lab => (
-                      <option key={`lab-${lab.id}`} value={`lab-${lab.id}`}>{lab.nombre}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Áreas Administrativas">
-                    {dashboardData.areas.map(area => (
-                      <option key={`area-${area.id}`} value={`area-${area.id}`}>{area.nombre}</option>
-                    ))}
-                  </optgroup>
-                </select>
-                <select
-                  className="form-select form-select-sm rounded-3 border"
-                  style={{ maxWidth: '150px', fontSize: '12px' }}
-                  value={filtroTablaEstado}
-                  onChange={(e) => setFiltroTablaEstado(e.target.value)}
-                  title="Filtrar por estado"
-                >
-                  <option value="todos">Todos los estados</option>
-                  <option value="Operativo">🟢 Operativo</option>
-                  <option value="Mantenimiento">🟡 Mantenimiento</option>
-                  <option value="Dañado">🔴 Dañado</option>
-                </select>
-                {(filtroTablaUbicacion !== 'todos' || filtroTablaEstado !== 'todos') && (
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light border rounded-3"
-                    style={{ fontSize: '12px' }}
-                    onClick={() => { setFiltroTablaUbicacion('todos'); setFiltroTablaEstado('todos'); }}
-                    title="Limpiar filtros"
-                  >
-                    <i className="bi bi-x-circle me-1"></i>Limpiar
-                  </button>
-                )}
-              </>
-            )}
-            <div className="input-group rounded-3 overflow-hidden search-box" style={{ maxWidth: '280px', height: '38px' }}>
-              <span className="input-group-text bg-white border-0"><i className="bi bi-search text-muted"></i></span>
-              <input type="text" className="form-control border-0 ps-0 text-dark small" placeholder="Buscar o habla..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ fontSize: '13px' }} />
-              <span className="bg-white border-0 d-flex align-items-center pe-2">
-                <BotonVoz onResultado={(texto) => setBusqueda(texto)} title="Buscar equipos por voz" />
-              </span>
-            </div>
-          </div>
+  return (
+    <div className="card border-0 rounded-4 bg-white p-3 p-md-4 shadow-sm">
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 mb-md-4 gap-2 gap-md-3">
+        <div>
+          <h5 className="fw-bold text-dark mb-0 fs-6 fs-md-5">Equipos</h5>
+          <p className="text-muted small mb-0">
+            {filtroLabId
+              ? `Equipos en ${dashboardData.laboratorios.find(l => l.id === filtroLabId)?.nombre || 'laboratorio seleccionado'}`
+              : filtroAreaId
+              ? `Equipos en ${dashboardData.areas.find(a => a.id === filtroAreaId)?.nombre || 'área seleccionada'}`
+              : filtroPersonaId
+              ? `Equipos asignados a ${dashboardData.personas.find(p => p.id === filtroPersonaId)?.nombre || 'persona seleccionada'}`
+              : `Total filtrado: ${equiposMostrar.length} activos`}
+          </p>
         </div>
-
-        <div className="table-responsive">
-          <table className="table align-middle" style={{ borderCollapse: 'separate', borderSpacing: '0 6px' }}>
-            <thead>
-              <tr className="text-muted small tracking-wider" style={{ fontSize: '10px', borderBottom: '1px solid #f1f5f9' }}>
-                <th className="pb-2 border-0 ps-2 ps-md-3" style={{ width: '40px' }}>Nº</th>
-                <th className="pb-2 border-0 ps-2 ps-md-3">CÓDIGO</th>
-                <th className="pb-2 border-0">TIPO</th>
-                <th className="pb-2 border-0">MARCA</th>
-                <th className="pb-2 border-0 d-none d-md-table-cell">MODELO</th>
-                <th className="pb-2 border-0 d-none d-md-table-cell">SERIE</th>
-                <th className="pb-2 border-0">ESTADO</th>
-                <th className="pb-2 border-0 d-none d-lg-table-cell">LABORATORIO</th>
-                <th className="pb-2 border-0 d-none d-lg-table-cell">ÁREA</th>
-                <th className="pb-2 border-0 d-none d-lg-table-cell">ASIGNADO A</th>
-                <th className="pb-2 border-0 text-end pe-2 pe-md-3">ACCIONES</th>
-              </tr>
-            </thead>
-            <tbody>
-              {equiposMostrar.length === 0 ? (
-                <tr>
-                  <td colSpan="10" className="text-center py-4 text-muted small bg-light rounded-4">
-                    <i className="bi bi-folder-x d-block fs-3 mb-2 text-secondary"></i>
-                    No hay equipos que coincidan.
-                  </td>
-                </tr>
-              ) : (
-               equiposMostrar.map((comp, index) => {
-                  const areaNombre = dashboardData.areas?.find(a => a.id === comp.area_id)?.nombre || '';
-                  const personaNombre = dashboardData.personas?.find(p => p.id === comp.persona_id)?.nombre || '';
-                  return (
-                    <tr key={comp.id} className="table-row-soft rounded-4 shadow-none">
-                      <td className="fw-bold ps-2 ps-md-3 rounded-start-3 border-0 align-middle" style={{ fontSize: '12px', cursor: 'pointer', color: '#059669' }}
-                        onClick={() => setPcSeleccionadaId(comp.id)} title="Ver Historial">
-                        <u>{comp.codigo_inventario}</u>
-                      </td>
-                      <td className="border-0"><span className="fw-semibold">{comp.tipo || '—'}</span></td>
-                      <td className="border-0">{comp.marca || '—'}</td>
-                      <td className="border-0 d-none d-md-table-cell">{comp.modelo || '—'}</td>
-                      <td className="border-0 d-none d-md-table-cell" style={{ fontSize: '11px' }}>{comp.numero_serie || '—'}</td>
-                      <td className="border-0">
-                        <span className={`badge ${comp.estado === 'Operativo' ? 'bg-success-subtle text-success border border-success' : comp.estado === 'Mantenimiento' ? 'bg-warning-subtle text-warning-emphasis border border-warning' : 'bg-danger-subtle text-danger border border-danger'} px-2 py-1 rounded-3 fw-semibold`} style={{ fontSize: '9px' }}>
-                          {comp.estado === 'Operativo' && '🟢'} {comp.estado === 'Mantenimiento' && '🟡'} {comp.estado === 'Dañado' && '🔴'} {comp.estado}
-                        </span>
-                      </td>
-                      <td className="ps-2 ps-md-3 rounded-start-3 border-0 align-middle text-center fw-bold" style={{ fontSize: '12px', color: '#6b7280' }}>
-  {index + 1}
-</td>
-                      <td className="border-0 text-dark fw-medium d-none d-lg-table-cell" style={{ fontSize: '11px' }}>
-                        <i className="bi bi-building me-1 text-muted"></i>{comp.nombre_laboratorio || 'SIN ASIGNAR'}
-                      </td>
-                      <td className="border-0 text-dark fw-medium d-none d-lg-table-cell" style={{ fontSize: '11px' }}>
-                        <i className="bi bi-building me-1 text-muted"></i>{areaNombre || 'SIN ASIGNAR'}
-                      </td>
-                      <td className="border-0 text-dark fw-medium d-none d-lg-table-cell" style={{ fontSize: '11px' }}>
-                        <i className="bi bi-person me-1 text-muted"></i>{personaNombre || 'SIN ASIGNAR'}
-                      </td>
-                      <td className="border-0 text-end pe-2 pe-md-3 rounded-end-3">
-                        <button onClick={() => setQrEquipoCodigo(comp.codigo_inventario)} className="btn btn-sm btn-link text-info p-1 rounded-3 me-1" title="Ver código QR">
-                          <i className="bi bi-qr-code fs-6"></i>
-                        </button>
-                        <button onClick={() => abrirEditor(comp.id)} className="btn btn-sm btn-link text-warning p-1 rounded-3 me-1" title="Editar">
-                          <i className="bi bi-pencil fs-6"></i>
-                        </button>
-                        <button onClick={() => setPcSeleccionadaId(comp.id)} className="btn btn-sm btn-link text-primary p-1 rounded-3 me-1" title="Historial">
-                          <i className="bi bi-journal-text fs-6"></i>
-                        </button>
-                        {comp.persona_id && esAdmin && (
-                          <button onClick={() => abrirConfirmarDesasignar(comp.id)} className="btn btn-sm btn-link text-secondary p-1 rounded-3 me-1" title="Desasignar de esta persona (solo administrador)">
-                            <i className="bi bi-person-dash fs-6"></i>
-                          </button>
-                        )}
-                        {esAdmin && (
-                          <button onClick={() => abrirConfirmarEliminar(comp.id)} className="btn btn-sm btn-link text-danger p-1 hover-bg-danger rounded-3" title="Eliminar (solo administrador)">
-                            <i className="bi bi-trash3 fs-6"></i>
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
+        <div className="d-flex gap-2 align-items-center flex-wrap">
+          {esVistaPrincipal && (
+            <>
+              <select
+                className="form-select form-select-sm rounded-3 border"
+                style={{ maxWidth: '190px', fontSize: '12px' }}
+                value={filtroTablaUbicacion}
+                onChange={(e) => setFiltroTablaUbicacion(e.target.value)}
+                title="Filtrar por ubicación"
+              >
+                <option value="todos">📍 Todas las ubicaciones</option>
+                <optgroup label="Laboratorios">
+                  {dashboardData.laboratorios.map(lab => (
+                    <option key={`lab-${lab.id}`} value={`lab-${lab.id}`}>{lab.nombre}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Áreas Administrativas">
+                  {dashboardData.areas.map(area => (
+                    <option key={`area-${area.id}`} value={`area-${area.id}`}>{area.nombre}</option>
+                  ))}
+                </optgroup>
+              </select>
+              <select
+                className="form-select form-select-sm rounded-3 border"
+                style={{ maxWidth: '150px', fontSize: '12px' }}
+                value={filtroTablaEstado}
+                onChange={(e) => setFiltroTablaEstado(e.target.value)}
+                title="Filtrar por estado"
+              >
+                <option value="todos">Todos los estados</option>
+                <option value="Operativo">🟢 Operativo</option>
+                <option value="Mantenimiento">🟡 Mantenimiento</option>
+                <option value="Dañado">🔴 Dañado</option>
+              </select>
+              {(filtroTablaUbicacion !== 'todos' || filtroTablaEstado !== 'todos') && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-light border rounded-3"
+                  style={{ fontSize: '12px' }}
+                  onClick={() => { setFiltroTablaUbicacion('todos'); setFiltroTablaEstado('todos'); }}
+                  title="Limpiar filtros"
+                >
+                  <i className="bi bi-x-circle me-1"></i>Limpiar
+                </button>
               )}
-            </tbody>
-          </table>
+            </>
+          )}
+          <div className="input-group rounded-3 overflow-hidden search-box" style={{ maxWidth: '280px', height: '38px' }}>
+            <span className="input-group-text bg-white border-0"><i className="bi bi-search text-muted"></i></span>
+            <input type="text" className="form-control border-0 ps-0 text-dark small" placeholder="Buscar o habla..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ fontSize: '13px' }} />
+            <span className="bg-white border-0 d-flex align-items-center pe-2">
+              <BotonVoz onResultado={(texto) => setBusqueda(texto)} title="Buscar equipos por voz" />
+            </span>
+          </div>
         </div>
       </div>
-    );
-  };
 
-  // ============================================================
-  // RENDER DEL DASHBOARD COMPLETO (EQUIPOS)
-  // ============================================================
+      {/* ===== TABLA CON SCROLL VERTICAL ===== */}
+      <div className="table-responsive" style={{ maxHeight: '450px', overflowY: 'auto' }}>
+        <table className="table align-middle" style={{ borderCollapse: 'separate', borderSpacing: '0 6px' }}>
+          <thead>
+            <tr className="text-muted small tracking-wider" style={{ fontSize: '10px', borderBottom: '1px solid #f1f5f9' }}>
+              <th className="pb-2 border-0 ps-2 ps-md-3" style={{ width: '40px' }}>Nº</th>
+              <th className="pb-2 border-0 ps-2 ps-md-3">CÓDIGO</th>
+              <th className="pb-2 border-0">TIPO</th>
+              <th className="pb-2 border-0">MARCA</th>
+              <th className="pb-2 border-0 d-none d-md-table-cell">MODELO</th>
+              <th className="pb-2 border-0 d-none d-md-table-cell">SERIE</th>
+              <th className="pb-2 border-0">ESTADO</th>
+              <th className="pb-2 border-0 d-none d-lg-table-cell">LABORATORIO</th>
+              <th className="pb-2 border-0 d-none d-lg-table-cell">ÁREA</th>
+              <th className="pb-2 border-0 d-none d-lg-table-cell">ASIGNADO A</th>
+              <th className="pb-2 border-0 text-end pe-2 pe-md-3">ACCIONES</th>
+            </tr>
+          </thead>
+          <tbody>
+            {equiposMostrar.length === 0 ? (
+              <tr>
+                <td colSpan="10" className="text-center py-4 text-muted small bg-light rounded-4">
+                  <i className="bi bi-folder-x d-block fs-3 mb-2 text-secondary"></i>
+                  No hay equipos que coincidan.
+                </td>
+              </tr>
+            ) : (
+              equiposMostrar.map((comp, index) => {
+                const areaNombre = dashboardData.areas?.find(a => a.id === comp.area_id)?.nombre || '';
+                const personaNombre = dashboardData.personas?.find(p => p.id === comp.persona_id)?.nombre || '';
+                return (
+                  <tr key={comp.id} className="table-row-soft rounded-4 shadow-none">
+                    <td className="fw-bold ps-2 ps-md-3 rounded-start-3 border-0 align-middle" style={{ fontSize: '12px', cursor: 'pointer', color: '#059669' }}
+                      onClick={() => setPcSeleccionadaId(comp.id)} title="Ver Historial">
+                      <u>{comp.codigo_inventario}</u>
+                    </td>
+                    <td className="border-0"><span className="fw-semibold">{comp.tipo || '—'}</span></td>
+                    <td className="border-0">{comp.marca || '—'}</td>
+                    <td className="border-0 d-none d-md-table-cell">{comp.modelo || '—'}</td>
+                    <td className="border-0 d-none d-md-table-cell" style={{ fontSize: '11px' }}>{comp.numero_serie || '—'}</td>
+                    <td className="border-0">
+                      <span className={`badge ${comp.estado === 'Operativo' ? 'bg-success-subtle text-success border border-success' : comp.estado === 'Mantenimiento' ? 'bg-warning-subtle text-warning-emphasis border border-warning' : 'bg-danger-subtle text-danger border border-danger'} px-2 py-1 rounded-3 fw-semibold`} style={{ fontSize: '9px' }}>
+                        {comp.estado === 'Operativo' && '🟢'} {comp.estado === 'Mantenimiento' && '🟡'} {comp.estado === 'Dañado' && '🔴'} {comp.estado}
+                      </span>
+                    </td>
+                    <td className="ps-2 ps-md-3 rounded-start-3 border-0 align-middle text-center fw-bold" style={{ fontSize: '12px', color: '#6b7280' }}>
+                      {index + 1}
+                    </td>
+                    <td className="border-0 text-dark fw-medium d-none d-lg-table-cell" style={{ fontSize: '11px' }}>
+                      <i className="bi bi-building me-1 text-muted"></i>{comp.nombre_laboratorio || 'SIN ASIGNAR'}
+                    </td>
+                    <td className="border-0 text-dark fw-medium d-none d-lg-table-cell" style={{ fontSize: '11px' }}>
+                      <i className="bi bi-building me-1 text-muted"></i>{areaNombre || 'SIN ASIGNAR'}
+                    </td>
+                    <td className="border-0 text-dark fw-medium d-none d-lg-table-cell" style={{ fontSize: '11px' }}>
+                      <i className="bi bi-person me-1 text-muted"></i>{personaNombre || 'SIN ASIGNAR'}
+                    </td>
+                    <td className="border-0 text-end pe-2 pe-md-3 rounded-end-3">
+                      <button onClick={() => setQrEquipoCodigo(comp.codigo_inventario)} className="btn btn-sm btn-link text-info p-1 rounded-3 me-1" title="Ver código QR">
+                        <i className="bi bi-qr-code fs-6"></i>
+                      </button>
+                      <button onClick={() => abrirEditor(comp.id)} className="btn btn-sm btn-link text-warning p-1 rounded-3 me-1" title="Editar">
+                        <i className="bi bi-pencil fs-6"></i>
+                      </button>
+                      <button onClick={() => setPcSeleccionadaId(comp.id)} className="btn btn-sm btn-link text-primary p-1 rounded-3 me-1" title="Historial">
+                        <i className="bi bi-journal-text fs-6"></i>
+                      </button>
+                      {comp.persona_id && esAdmin && (
+                        <button onClick={() => abrirConfirmarDesasignar(comp.id)} className="btn btn-sm btn-link text-secondary p-1 rounded-3 me-1" title="Desasignar de esta persona (solo administrador)">
+                          <i className="bi bi-person-dash fs-6"></i>
+                        </button>
+                      )}
+                      {esAdmin && (
+                        <button onClick={() => abrirConfirmarEliminar(comp.id)} className="btn btn-sm btn-link text-danger p-1 hover-bg-danger rounded-3" title="Eliminar (solo administrador)">
+                          <i className="bi bi-trash3 fs-6"></i>
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+      {/* FIN DE LA TABLA CON SCROLL */}
+    </div>
+  );
+};
+
   const renderEquipos = () => (
     <>
       {/* KPI */}
