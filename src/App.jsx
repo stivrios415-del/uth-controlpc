@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
@@ -21,7 +20,6 @@ import { supabase } from './supabaseClient';
 import PersonaDetalle from './PersonasDetalle';
 import logo from './logo.png';
 import RegistroPorVoz from './RegistroporVoz';
-
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -92,6 +90,19 @@ function App() {
 
   // Atajo para saber si el usuario actual es administrador
   const esAdmin = usuario?.rol === 'admin';
+
+  // ==================== NAVEGACIÓN ====================
+  // Antes esto estaba repetido (6 líneas) en cada uno de los 8 botones del
+  // navbar. Ahora todos llaman a esta única función para limpiar la vista.
+  const irA = (vista) => {
+    setVistaActual(vista);
+    setPcSeleccionadaId(null);
+    setEquipoEditandoId(null);
+    setNavbarOpen(false);
+    setLaboratorioSeleccionado(null);
+    setAreaSeleccionada(null);
+    setPersonaSeleccionada(null);
+  };
 
   // ==================== FUNCIONES ====================
   const cargarCatalogos = useCallback(async () => {
@@ -182,7 +193,6 @@ function App() {
       // El código de inventario ya no se calcula aquí: lo genera un trigger
       // en Supabase (secuencia atómica) al momento de insertar, para que
       // nunca se repita aunque varias personas registren equipos a la vez.
-
       setDashboardData({
         codigo_automatico: 'Se generará automáticamente',
         laboratorios: labs,
@@ -192,7 +202,6 @@ function App() {
       });
 
       setErrorConexion(false);
-
     } catch (error) {
       console.error('Error en cargarInventario:', error);
       setErrorConexion(true);
@@ -357,7 +366,6 @@ function App() {
   // se guarda cuándo, quién y POR QUÉ lo hizo. El equipo pasa a "Historial".
   // SOLO EL ADMINISTRADOR puede dar de baja equipos.
 
-  // Abre el modal pidiendo el motivo de la baja
   const abrirConfirmarEliminar = (id) => {
     if (!esAdmin) {
       alert('⛔ Solo un administrador puede dar de baja equipos.');
@@ -367,14 +375,12 @@ function App() {
     setMotivoBaja('');
   };
 
-  // Cierra el modal sin hacer nada
   const cancelarEliminar = () => {
     if (enviandoBaja) return;
     setEquipoAEliminarId(null);
     setMotivoBaja('');
   };
 
-  // Confirma la baja: exige un motivo, guarda todo y actualiza la bitácora
   const confirmarEliminarEquipo = async () => {
     if (!esAdmin) {
       alert('⛔ Solo un administrador puede dar de baja equipos.');
@@ -530,7 +536,6 @@ function App() {
   }, [computadoras, busqueda, dashboardData.personas]);
 
   // Personas que YA tienen un equipo activo asignado (para no permitir duplicados).
-  // Se calcula sobre "computadoras" que solo trae equipos con eliminado=false.
   const personasOcupadas = useMemo(() => {
     const ids = new Set();
     computadoras.forEach(c => {
@@ -561,7 +566,6 @@ function App() {
       return;
     }
 
-    // Filtra por el laboratorio elegido en "Reportes" (o todos)
     const equipos = filtroReporte !== 'todos'
       ? computadorasFiltradas.filter(c => c.laboratorio_id === parseInt(filtroReporte))
       : computadorasFiltradas;
@@ -571,8 +575,6 @@ function App() {
       return;
     }
 
-    // Si el admin elige un laboratorio específico, se muestra su nombre.
-    // Si elige "Todos", en vez de dejarlo vacío, decimos "EN GENERAL".
     const ubicacionNombre = filtroReporte !== 'todos'
       ? (dashboardData.laboratorios.find(l => l.id === parseInt(filtroReporte))?.nombre || '')
       : 'EN GENERAL';
@@ -597,7 +599,6 @@ function App() {
       bottom: { style: 'thin' }, right: { style: 'thin' }
     };
 
-    // ---- Título ----
     sheet.mergeCells('A1:I1');
     const tituloCell = sheet.getCell('A1');
     tituloCell.value = 'CONTROL DE INVENTARIO COMPUTADORAS';
@@ -605,7 +606,6 @@ function App() {
     tituloCell.alignment = { horizontal: 'center', vertical: 'middle' };
     sheet.getRow(1).height = 26;
 
-    // ---- Ubicación ----
     sheet.mergeCells('A2:I2');
     const ubicacionCell = sheet.getCell('A2');
     ubicacionCell.value = `UBICACIÓN: ${ubicacionNombre}`;
@@ -613,11 +613,10 @@ function App() {
     ubicacionCell.alignment = { horizontal: 'left', vertical: 'middle' };
     sheet.getRow(2).height = 20;
 
-    // ---- Encabezados combinados (filas 3 y 4) ----
-    sheet.mergeCells('A3:A4'); // Nº
-    sheet.mergeCells('B3:E3'); // Descripción
-    sheet.mergeCells('F3:H3'); // Especificaciones CPU
-    sheet.mergeCells('I3:I4'); // Año CPU
+    sheet.mergeCells('A3:A4');
+    sheet.mergeCells('B3:E3');
+    sheet.mergeCells('F3:H3');
+    sheet.mergeCells('I3:I4');
 
     sheet.getCell('A3').value = 'Nº';
     sheet.getCell('B3').value = 'Descripción';
@@ -642,7 +641,8 @@ function App() {
     sheet.getRow(3).height = 18;
     sheet.getRow(4).height = 18;
 
-    // ---- Agrupar equipos: cada CPU abre un ítem nuevo, lo que sigue (ej. MONITOR) se agrupa con él ----
+    // Agrupar equipos: cada CPU/Laptop/Desktop abre un ítem nuevo; lo que sigue
+    // (ej. un Monitor) se agrupa con él.
     const grupos = [];
     equipos.forEach(equipo => {
       const tipoUpper = (equipo.tipo || '').toUpperCase();
@@ -680,7 +680,6 @@ function App() {
 
       const filaFin = filaActual - 1;
 
-      // Combina el número de ítem verticalmente
       if (filaFin > filaInicio) {
         sheet.mergeCells(`A${filaInicio}:A${filaFin}`);
       }
@@ -689,7 +688,6 @@ function App() {
       celdaNum.font = { bold: true, size: 10 };
       celdaNum.alignment = { horizontal: 'center', vertical: 'middle' };
 
-      // Combina la marca verticalmente solo si es la misma en todo el grupo
       const marcasUnicas = [...new Set(grupo.map(e => e.marca || ''))];
       if (filaFin > filaInicio && marcasUnicas.length === 1) {
         sheet.mergeCells(`C${filaInicio}:C${filaFin}`);
@@ -708,310 +706,316 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
-const exportarPDF = () => {
-  if (computadorasFiltradas.length === 0) {
-    alert('No hay datos para exportar.');
-    return;
-  }
-
-  const equiposPdf = filtroReporte !== 'todos'
-    ? computadorasFiltradas.filter(c => c.laboratorio_id === parseInt(filtroReporte))
-    : computadorasFiltradas;
-
-  if (equiposPdf.length === 0) {
-    alert('No hay equipos para ese laboratorio.');
-    return;
-  }
-
-  const ubicacionNombrePdf = filtroReporte !== 'todos'
-    ? (dashboardData.laboratorios.find(l => l.id === parseInt(filtroReporte))?.nombre || '')
-    : 'EN GENERAL';
-
-  const doc = new jsPDF('landscape', 'mm', 'a4');
-  const pageWidth = doc.internal.pageSize.getWidth();
-
-  doc.setFontSize(16);
-  doc.text('INVENTARIO DE EQUIPOS - UTH CONTROL-PC', pageWidth / 2, 15, { align: 'center' });
-  doc.setFontSize(11);
-  doc.text(`Ubicación: ${ubicacionNombrePdf}`, pageWidth / 2, 22, { align: 'center' });
-  doc.setFontSize(10);
-  doc.text(`Fecha: ${new Date().toLocaleDateString()}   |   Total de equipos: ${equiposPdf.length}`, pageWidth / 2, 28, { align: 'center' });
-
-  const headers = [[
-    'Nº', 'Código', 'Tipo', 'Marca', 'Modelo', 'Serie',
-    'Procesador', 'RAM', 'Disco', 'Año', 'Estado', 'Laboratorio',
-    'Área', 'Asignado a', 'Fecha Asig.'
-  ]];
-
-  const rows = equiposPdf.map((comp, idx) => {
-    const areaNombre = dashboardData.areas?.find(a => a.id === comp.area_id)?.nombre || '';
-    const personaNombre = dashboardData.personas?.find(p => p.id === comp.persona_id)?.nombre || '';
-    const fechaAsig = comp.fecha_asignacion
-      ? new Date(comp.fecha_asignacion).toLocaleDateString('es-HN')
-      : '';
-    return [
-      idx + 1,
-      comp.codigo_inventario,
-      comp.tipo || '',
-      comp.marca || '',
-      comp.modelo || '',
-      comp.numero_serie || '',
-      comp.procesador || '',
-      comp.ram_gb ? `${comp.ram_gb}GB` : '',
-      comp.disco || '',
-      comp.ano || '',
-      comp.estado,
-      comp.nombre_laboratorio || 'SIN ASIGNAR',
-      areaNombre || '—',
-      personaNombre || '—',
-      fechaAsig || '—'
-    ];
-  });
-
-  autoTable(doc, {
-    head: headers,
-    body: rows,
-    startY: 34,
-    styles: {
-  fontSize: 8,
-  cellPadding: 2,
-  valign: 'middle',
-  overflow: 'linebreak',
-  lineColor: [220, 226, 231],
-  lineWidth: 0.1,
-},
-headStyles: {
-  fillColor: [6, 95, 70],
-  textColor: [255, 255, 255],
-  fontSize: 9,
-  halign: 'center',
-  cellPadding: 3,
-},
-bodyStyles: {
-  minCellHeight: 8,
-},
-alternateRowStyles: {
-  fillColor: [246, 250, 248],
-},columnStyles: {
-  0:  { cellWidth: 10  },  // Nº
-  1:  { cellWidth: 18 },  // Código
-  2:  { cellWidth: 14 },  // Tipo
-  3:  { cellWidth: 16 },  // Marca
-  4:  { cellWidth: 22 },  // Modelo
-  5:  { cellWidth: 22 },  // Serie
-  6:  { cellWidth: 28 },  // Procesador
-  7:  { cellWidth: 16 },  // RAM ← más ancho (antes 12)-
-  8:  { cellWidth: 16 },  // Disco
-  9:  { cellWidth: 12 },  // Año
-  10: { cellWidth: 20 },  // Estado ← más ancho (antes 16)
-  11: { cellWidth: 24 },  // Laboratorio ← más ancho (antes 18)
-  12: { cellWidth: 18 },  // Área
-  13: { cellWidth: 24 },  // Asignado a ← más ancho (antes 18)
-  14: { cellWidth: 20 },  // Fecha Asig.
-},
-margin: { left: 8, right: 8, bottom: 16 },
-    margin: { left: 8, right: 8, bottom: 16 },
-    didDrawPage: function () {
-      doc.setFontSize(8);
-      doc.text('Generado por UTH CONTROL-PC', pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
+  const exportarPDF = () => {
+    if (computadorasFiltradas.length === 0) {
+      alert('No hay datos para exportar.');
+      return;
     }
-  });
 
-  doc.save(`Inventario_UTH_${new Date().toISOString().slice(0,10)}.pdf`);
-};
-  // ============================================================
-  // FUNCIÓN PARA RENDERIZAR SOLO LA TABLA (con filtros)
-  // ============================================================
- const renderTablaEquipos = (filtroLabId = null, filtroAreaId = null, filtroPersonaId = null) => {
-  let equiposMostrar = computadorasFiltradas;
-  if (filtroLabId) {
-    equiposMostrar = equiposMostrar.filter(c => c.laboratorio_id === filtroLabId);
-  }
-  if (filtroAreaId) {
-    equiposMostrar = equiposMostrar.filter(c => c.area_id === filtroAreaId);
-  }
-  if (filtroPersonaId) {
-    equiposMostrar = equiposMostrar.filter(c => c.persona_id === filtroPersonaId);
-  }
+    const equiposPdf = filtroReporte !== 'todos'
+      ? computadorasFiltradas.filter(c => c.laboratorio_id === parseInt(filtroReporte))
+      : computadorasFiltradas;
 
-  const esVistaPrincipal = !filtroLabId && !filtroAreaId && !filtroPersonaId;
-  if (esVistaPrincipal) {
-    if (filtroTablaUbicacion !== 'todos') {
-      if (filtroTablaUbicacion.startsWith('lab-')) {
-        const labId = parseInt(filtroTablaUbicacion.replace('lab-', ''));
-        equiposMostrar = equiposMostrar.filter(c => c.laboratorio_id === labId);
-      } else if (filtroTablaUbicacion.startsWith('area-')) {
-        const arId = parseInt(filtroTablaUbicacion.replace('area-', ''));
-        equiposMostrar = equiposMostrar.filter(c => c.area_id === arId);
+    if (equiposPdf.length === 0) {
+      alert('No hay equipos para ese laboratorio.');
+      return;
+    }
+
+    const ubicacionNombrePdf = filtroReporte !== 'todos'
+      ? (dashboardData.laboratorios.find(l => l.id === parseInt(filtroReporte))?.nombre || '')
+      : 'EN GENERAL';
+
+    const doc = new jsPDF('landscape', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    doc.setFontSize(16);
+    doc.text('INVENTARIO DE EQUIPOS - UTH CONTROL-PC', pageWidth / 2, 15, { align: 'center' });
+    doc.setFontSize(11);
+    doc.text(`Ubicación: ${ubicacionNombrePdf}`, pageWidth / 2, 22, { align: 'center' });
+    doc.setFontSize(10);
+    doc.text(`Fecha: ${new Date().toLocaleDateString()}   |   Total de equipos: ${equiposPdf.length}`, pageWidth / 2, 28, { align: 'center' });
+
+    const headers = [[
+      'Nº', 'Código', 'Tipo', 'Marca', 'Modelo', 'Serie',
+      'Procesador', 'RAM', 'Disco', 'Año', 'Estado', 'Laboratorio',
+      'Área', 'Asignado a', 'Fecha Asig.'
+    ]];
+
+    const rows = equiposPdf.map((comp, idx) => {
+      const areaNombre = dashboardData.areas?.find(a => a.id === comp.area_id)?.nombre || '';
+      const personaNombre = dashboardData.personas?.find(p => p.id === comp.persona_id)?.nombre || '';
+      const fechaAsig = comp.fecha_asignacion
+        ? new Date(comp.fecha_asignacion).toLocaleDateString('es-HN')
+        : '';
+      return [
+        idx + 1,
+        comp.codigo_inventario,
+        comp.tipo || '',
+        comp.marca || '',
+        comp.modelo || '',
+        comp.numero_serie || '',
+        comp.procesador || '',
+        comp.ram_gb ? `${comp.ram_gb}GB` : '',
+        comp.disco || '',
+        comp.ano || '',
+        comp.estado,
+        comp.nombre_laboratorio || 'SIN ASIGNAR',
+        areaNombre || '—',
+        personaNombre || '—',
+        fechaAsig || '—'
+      ];
+    });
+
+    autoTable(doc, {
+      head: headers,
+      body: rows,
+      startY: 34,
+      styles: {
+        fontSize: 8,
+        cellPadding: 2,
+        valign: 'middle',
+        overflow: 'linebreak',
+        lineColor: [220, 226, 231],
+        lineWidth: 0.1,
+      },
+      headStyles: {
+        fillColor: [6, 95, 70],
+        textColor: [255, 255, 255],
+        fontSize: 9,
+        halign: 'center',
+        cellPadding: 3,
+      },
+      bodyStyles: {
+        minCellHeight: 8,
+      },
+      alternateRowStyles: {
+        fillColor: [246, 250, 248],
+      },
+      columnStyles: {
+        0: { cellWidth: 10 },   // Nº
+        1: { cellWidth: 18 },   // Código
+        2: { cellWidth: 14 },   // Tipo
+        3: { cellWidth: 16 },   // Marca
+        4: { cellWidth: 22 },   // Modelo
+        5: { cellWidth: 22 },   // Serie
+        6: { cellWidth: 28 },   // Procesador
+        7: { cellWidth: 16 },   // RAM
+        8: { cellWidth: 16 },   // Disco
+        9: { cellWidth: 12 },   // Año
+        10: { cellWidth: 20 },  // Estado
+        11: { cellWidth: 24 },  // Laboratorio
+        12: { cellWidth: 18 },  // Área
+        13: { cellWidth: 24 },  // Asignado a
+        14: { cellWidth: 20 },  // Fecha Asig.
+      },
+      // (antes esta línea "margin" estaba duplicada; se dejó una sola vez)
+      margin: { left: 8, right: 8, bottom: 16 },
+      didDrawPage: function () {
+        doc.setFontSize(8);
+        doc.text('Generado por UTH CONTROL-PC', pageWidth / 2, doc.internal.pageSize.getHeight() - 8, { align: 'center' });
+      }
+    });
+
+    doc.save(`Inventario_UTH_${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
+  // ============================================================
+  // TABLA DE EQUIPOS (con filtros)
+  // ============================================================
+  const renderTablaEquipos = (filtroLabId = null, filtroAreaId = null, filtroPersonaId = null) => {
+    let equiposMostrar = computadorasFiltradas;
+    if (filtroLabId) {
+      equiposMostrar = equiposMostrar.filter(c => c.laboratorio_id === filtroLabId);
+    }
+    if (filtroAreaId) {
+      equiposMostrar = equiposMostrar.filter(c => c.area_id === filtroAreaId);
+    }
+    if (filtroPersonaId) {
+      equiposMostrar = equiposMostrar.filter(c => c.persona_id === filtroPersonaId);
+    }
+
+    // Los filtros de ubicación/estado de la vista principal "Equipos" solo
+    // aplican cuando la tabla se llama sin un filtro de contexto ya impuesto
+    // desde afuera (Laboratorios, Administrativo o Personas).
+    const esVistaPrincipal = !filtroLabId && !filtroAreaId && !filtroPersonaId;
+    if (esVistaPrincipal) {
+      if (filtroTablaUbicacion !== 'todos') {
+        if (filtroTablaUbicacion.startsWith('lab-')) {
+          const labId = parseInt(filtroTablaUbicacion.replace('lab-', ''));
+          equiposMostrar = equiposMostrar.filter(c => c.laboratorio_id === labId);
+        } else if (filtroTablaUbicacion.startsWith('area-')) {
+          const arId = parseInt(filtroTablaUbicacion.replace('area-', ''));
+          equiposMostrar = equiposMostrar.filter(c => c.area_id === arId);
+        }
+      }
+      if (filtroTablaEstado !== 'todos') {
+        equiposMostrar = equiposMostrar.filter(c => c.estado === filtroTablaEstado);
       }
     }
-    if (filtroTablaEstado !== 'todos') {
-      equiposMostrar = equiposMostrar.filter(c => c.estado === filtroTablaEstado);
-    }
-  }
 
-  return (
-    <div className="card border-0 rounded-4 bg-white p-3 p-md-4 shadow-sm">
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 mb-md-4 gap-2 gap-md-3">
-        <div>
-          <h5 className="fw-bold text-dark mb-0 fs-6 fs-md-5">Equipos</h5>
-          <p className="text-muted small mb-0">
-            {filtroLabId
-              ? `Equipos en ${dashboardData.laboratorios.find(l => l.id === filtroLabId)?.nombre || 'laboratorio seleccionado'}`
-              : filtroAreaId
-              ? `Equipos en ${dashboardData.areas.find(a => a.id === filtroAreaId)?.nombre || 'área seleccionada'}`
-              : filtroPersonaId
-              ? `Equipos asignados a ${dashboardData.personas.find(p => p.id === filtroPersonaId)?.nombre || 'persona seleccionada'}`
-              : `Total filtrado: ${equiposMostrar.length} activos`}
-          </p>
-        </div>
-        <div className="d-flex gap-2 align-items-center flex-wrap">
-          {esVistaPrincipal && (
-            <>
-              <select
-                className="form-select form-select-sm rounded-3 border"
-                style={{ maxWidth: '190px', fontSize: '12px' }}
-                value={filtroTablaUbicacion}
-                onChange={(e) => setFiltroTablaUbicacion(e.target.value)}
-                title="Filtrar por ubicación"
-              >
-                <option value="todos">📍 Todas las ubicaciones</option>
-                <optgroup label="Laboratorios">
-                  {dashboardData.laboratorios.map(lab => (
-                    <option key={`lab-${lab.id}`} value={`lab-${lab.id}`}>{lab.nombre}</option>
-                  ))}
-                </optgroup>
-                <optgroup label="Áreas Administrativas">
-                  {dashboardData.areas.map(area => (
-                    <option key={`area-${area.id}`} value={`area-${area.id}`}>{area.nombre}</option>
-                  ))}
-                </optgroup>
-              </select>
-              <select
-                className="form-select form-select-sm rounded-3 border"
-                style={{ maxWidth: '150px', fontSize: '12px' }}
-                value={filtroTablaEstado}
-                onChange={(e) => setFiltroTablaEstado(e.target.value)}
-                title="Filtrar por estado"
-              >
-                <option value="todos">Todos los estados</option>
-                <option value="Operativo">🟢 Operativo</option>
-                <option value="Mantenimiento">🟡 Mantenimiento</option>
-                <option value="Dañado">🔴 Dañado</option>
-              </select>
-              {(filtroTablaUbicacion !== 'todos' || filtroTablaEstado !== 'todos') && (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-light border rounded-3"
-                  style={{ fontSize: '12px' }}
-                  onClick={() => { setFiltroTablaUbicacion('todos'); setFiltroTablaEstado('todos'); }}
-                  title="Limpiar filtros"
+    return (
+      <div className="card border-0 rounded-4 bg-white p-3 p-md-4 shadow-sm">
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 mb-md-4 gap-2 gap-md-3">
+          <div>
+            <h5 className="fw-bold text-dark mb-0 fs-6 fs-md-5">Equipos</h5>
+            <p className="text-muted small mb-0">
+              {filtroLabId
+                ? `Equipos en ${dashboardData.laboratorios.find(l => l.id === filtroLabId)?.nombre || 'laboratorio seleccionado'}`
+                : filtroAreaId
+                ? `Equipos en ${dashboardData.areas.find(a => a.id === filtroAreaId)?.nombre || 'área seleccionada'}`
+                : filtroPersonaId
+                ? `Equipos asignados a ${dashboardData.personas.find(p => p.id === filtroPersonaId)?.nombre || 'persona seleccionada'}`
+                : `Total filtrado: ${equiposMostrar.length} activos`}
+            </p>
+          </div>
+          <div className="d-flex gap-2 align-items-center flex-wrap">
+            {esVistaPrincipal && (
+              <>
+                <select
+                  className="form-select form-select-sm rounded-3 border"
+                  style={{ maxWidth: '190px', fontSize: '12px' }}
+                  value={filtroTablaUbicacion}
+                  onChange={(e) => setFiltroTablaUbicacion(e.target.value)}
+                  title="Filtrar por ubicación"
                 >
-                  <i className="bi bi-x-circle me-1"></i>Limpiar
-                </button>
-              )}
-            </>
-          )}
-          <div className="input-group rounded-3 overflow-hidden search-box" style={{ maxWidth: '280px', height: '38px' }}>
-            <span className="input-group-text bg-white border-0"><i className="bi bi-search text-muted"></i></span>
-            <input type="text" className="form-control border-0 ps-0 text-dark small" placeholder="Buscar o habla..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ fontSize: '13px' }} />
-            <span className="bg-white border-0 d-flex align-items-center pe-2">
-              <BotonVoz onResultado={(texto) => setBusqueda(texto)} title="Buscar equipos por voz" />
-            </span>
+                  <option value="todos">📍 Todas las ubicaciones</option>
+                  <optgroup label="Laboratorios">
+                    {dashboardData.laboratorios.map(lab => (
+                      <option key={`lab-${lab.id}`} value={`lab-${lab.id}`}>{lab.nombre}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Áreas Administrativas">
+                    {dashboardData.areas.map(area => (
+                      <option key={`area-${area.id}`} value={`area-${area.id}`}>{area.nombre}</option>
+                    ))}
+                  </optgroup>
+                </select>
+                <select
+                  className="form-select form-select-sm rounded-3 border"
+                  style={{ maxWidth: '150px', fontSize: '12px' }}
+                  value={filtroTablaEstado}
+                  onChange={(e) => setFiltroTablaEstado(e.target.value)}
+                  title="Filtrar por estado"
+                >
+                  <option value="todos">Todos los estados</option>
+                  <option value="Operativo">🟢 Operativo</option>
+                  <option value="Mantenimiento">🟡 Mantenimiento</option>
+                  <option value="Dañado">🔴 Dañado</option>
+                </select>
+                {(filtroTablaUbicacion !== 'todos' || filtroTablaEstado !== 'todos') && (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-light border rounded-3"
+                    style={{ fontSize: '12px' }}
+                    onClick={() => { setFiltroTablaUbicacion('todos'); setFiltroTablaEstado('todos'); }}
+                    title="Limpiar filtros"
+                  >
+                    <i className="bi bi-x-circle me-1"></i>Limpiar
+                  </button>
+                )}
+              </>
+            )}
+            <div className="input-group rounded-3 overflow-hidden search-box" style={{ maxWidth: '280px', height: '38px' }}>
+              <span className="input-group-text bg-white border-0"><i className="bi bi-search text-muted"></i></span>
+              <input type="text" className="form-control border-0 ps-0 text-dark small" placeholder="Buscar o habla..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ fontSize: '13px' }} />
+              <span className="bg-white border-0 d-flex align-items-center pe-2">
+                <BotonVoz onResultado={(texto) => setBusqueda(texto)} title="Buscar equipos por voz" />
+              </span>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* ===== TABLA CON SCROLL VERTICAL ===== */}
-      <div className="table-responsive" style={{ maxHeight: '450px', overflowY: 'auto' }}>
-        <table className="table align-middle" style={{ borderCollapse: 'separate', borderSpacing: '0 6px' }}>
-          <thead>
-            <tr className="text-muted small tracking-wider" style={{ fontSize: '10px', borderBottom: '1px solid #f1f5f9' }}>
-              <th className="pb-2 border-0 ps-2 ps-md-3" style={{ width: '40px' }}>Nº</th>
-              <th className="pb-2 border-0 ps-2 ps-md-3">CÓDIGO</th>
-              <th className="pb-2 border-0">TIPO</th>
-              <th className="pb-2 border-0">MARCA</th>
-              <th className="pb-2 border-0 d-none d-md-table-cell">MODELO</th>
-              <th className="pb-2 border-0 d-none d-md-table-cell">SERIE</th>
-              <th className="pb-2 border-0">ESTADO</th>
-              <th className="pb-2 border-0 d-none d-lg-table-cell">LABORATORIO</th>
-              <th className="pb-2 border-0 d-none d-lg-table-cell">ÁREA</th>
-              <th className="pb-2 border-0 d-none d-lg-table-cell">ASIGNADO A</th>
-              <th className="pb-2 border-0 text-end pe-2 pe-md-3">ACCIONES</th>
-            </tr>
-          </thead>
-          <tbody>
-            {equiposMostrar.length === 0 ? (
-              <tr>
-                <td colSpan="10" className="text-center py-4 text-muted small bg-light rounded-4">
-                  <i className="bi bi-folder-x d-block fs-3 mb-2 text-secondary"></i>
-                  No hay equipos que coincidan.
-                </td>
+        <div className="table-responsive" style={{ maxHeight: '450px', overflowY: 'auto' }}>
+          <table className="table align-middle" style={{ borderCollapse: 'separate', borderSpacing: '0 6px' }}>
+            <thead>
+              <tr className="text-muted small tracking-wider" style={{ fontSize: '10px', borderBottom: '1px solid #f1f5f9' }}>
+                <th className="pb-2 border-0 ps-2 ps-md-3" style={{ width: '40px' }}>Nº</th>
+                <th className="pb-2 border-0 ps-2 ps-md-3">CÓDIGO</th>
+                <th className="pb-2 border-0">TIPO</th>
+                <th className="pb-2 border-0">MARCA</th>
+                <th className="pb-2 border-0 d-none d-md-table-cell">MODELO</th>
+                <th className="pb-2 border-0 d-none d-md-table-cell">SERIE</th>
+                <th className="pb-2 border-0">ESTADO</th>
+                <th className="pb-2 border-0 d-none d-lg-table-cell">LABORATORIO</th>
+                <th className="pb-2 border-0 d-none d-lg-table-cell">ÁREA</th>
+                <th className="pb-2 border-0 d-none d-lg-table-cell">ASIGNADO A</th>
+                <th className="pb-2 border-0 text-end pe-2 pe-md-3">ACCIONES</th>
               </tr>
-            ) : (
-              equiposMostrar.map((comp, index) => {
-                const areaNombre = dashboardData.areas?.find(a => a.id === comp.area_id)?.nombre || '';
-                const personaNombre = dashboardData.personas?.find(p => p.id === comp.persona_id)?.nombre || '';
-                return (
-                  <tr key={comp.id} className="table-row-soft rounded-4 shadow-none">
-                    <td className="fw-bold ps-2 ps-md-3 rounded-start-3 border-0 align-middle" style={{ fontSize: '12px', cursor: 'pointer', color: '#059669' }}
-                      onClick={() => setPcSeleccionadaId(comp.id)} title="Ver Historial">
-                      <u>{comp.codigo_inventario}</u>
-                    </td>
-                    <td className="border-0"><span className="fw-semibold">{comp.tipo || '—'}</span></td>
-                    <td className="border-0">{comp.marca || '—'}</td>
-                    <td className="border-0 d-none d-md-table-cell">{comp.modelo || '—'}</td>
-                    <td className="border-0 d-none d-md-table-cell" style={{ fontSize: '11px' }}>{comp.numero_serie || '—'}</td>
-                    <td className="border-0">
-                      <span className={`badge ${comp.estado === 'Operativo' ? 'bg-success-subtle text-success border border-success' : comp.estado === 'Mantenimiento' ? 'bg-warning-subtle text-warning-emphasis border border-warning' : 'bg-danger-subtle text-danger border border-danger'} px-2 py-1 rounded-3 fw-semibold`} style={{ fontSize: '9px' }}>
-                        {comp.estado === 'Operativo' && '🟢'} {comp.estado === 'Mantenimiento' && '🟡'} {comp.estado === 'Dañado' && '🔴'} {comp.estado}
-                      </span>
-                    </td>
-                    <td className="ps-2 ps-md-3 rounded-start-3 border-0 align-middle text-center fw-bold" style={{ fontSize: '12px', color: '#6b7280' }}>
-                      {index + 1}
-                    </td>
-                    <td className="border-0 text-dark fw-medium d-none d-lg-table-cell" style={{ fontSize: '11px' }}>
-                      <i className="bi bi-building me-1 text-muted"></i>{comp.nombre_laboratorio || 'SIN ASIGNAR'}
-                    </td>
-                    <td className="border-0 text-dark fw-medium d-none d-lg-table-cell" style={{ fontSize: '11px' }}>
-                      <i className="bi bi-building me-1 text-muted"></i>{areaNombre || 'SIN ASIGNAR'}
-                    </td>
-                    <td className="border-0 text-dark fw-medium d-none d-lg-table-cell" style={{ fontSize: '11px' }}>
-                      <i className="bi bi-person me-1 text-muted"></i>{personaNombre || 'SIN ASIGNAR'}
-                    </td>
-                    <td className="border-0 text-end pe-2 pe-md-3 rounded-end-3">
-                      <button onClick={() => setQrEquipoCodigo(comp.codigo_inventario)} className="btn btn-sm btn-link text-info p-1 rounded-3 me-1" title="Ver código QR">
-                        <i className="bi bi-qr-code fs-6"></i>
-                      </button>
-                      <button onClick={() => abrirEditor(comp.id)} className="btn btn-sm btn-link text-warning p-1 rounded-3 me-1" title="Editar">
-                        <i className="bi bi-pencil fs-6"></i>
-                      </button>
-                      <button onClick={() => setPcSeleccionadaId(comp.id)} className="btn btn-sm btn-link text-primary p-1 rounded-3 me-1" title="Historial">
-                        <i className="bi bi-journal-text fs-6"></i>
-                      </button>
-                      {comp.persona_id && esAdmin && (
-                        <button onClick={() => abrirConfirmarDesasignar(comp.id)} className="btn btn-sm btn-link text-secondary p-1 rounded-3 me-1" title="Desasignar de esta persona (solo administrador)">
-                          <i className="bi bi-person-dash fs-6"></i>
+            </thead>
+            <tbody>
+              {equiposMostrar.length === 0 ? (
+                <tr>
+                  <td colSpan="10" className="text-center py-4 text-muted small bg-light rounded-4">
+                    <i className="bi bi-folder-x d-block fs-3 mb-2 text-secondary"></i>
+                    No hay equipos que coincidan.
+                  </td>
+                </tr>
+              ) : (
+                equiposMostrar.map((comp, index) => {
+                  const areaNombre = dashboardData.areas?.find(a => a.id === comp.area_id)?.nombre || '';
+                  const personaNombre = dashboardData.personas?.find(p => p.id === comp.persona_id)?.nombre || '';
+                  return (
+                    <tr key={comp.id} className="table-row-soft rounded-4 shadow-none">
+                      <td className="fw-bold ps-2 ps-md-3 rounded-start-3 border-0 align-middle" style={{ fontSize: '12px', cursor: 'pointer', color: '#059669' }}
+                        onClick={() => setPcSeleccionadaId(comp.id)} title="Ver Historial">
+                        <u>{comp.codigo_inventario}</u>
+                      </td>
+                      <td className="border-0"><span className="fw-semibold">{comp.tipo || '—'}</span></td>
+                      <td className="border-0">{comp.marca || '—'}</td>
+                      <td className="border-0 d-none d-md-table-cell">{comp.modelo || '—'}</td>
+                      <td className="border-0 d-none d-md-table-cell" style={{ fontSize: '11px' }}>{comp.numero_serie || '—'}</td>
+                      <td className="border-0">
+                        <span className={`badge ${comp.estado === 'Operativo' ? 'bg-success-subtle text-success border border-success' : comp.estado === 'Mantenimiento' ? 'bg-warning-subtle text-warning-emphasis border border-warning' : 'bg-danger-subtle text-danger border border-danger'} px-2 py-1 rounded-3 fw-semibold`} style={{ fontSize: '9px' }}>
+                          {comp.estado === 'Operativo' && '🟢'} {comp.estado === 'Mantenimiento' && '🟡'} {comp.estado === 'Dañado' && '🔴'} {comp.estado}
+                        </span>
+                      </td>
+                      <td className="ps-2 ps-md-3 rounded-start-3 border-0 align-middle text-center fw-bold" style={{ fontSize: '12px', color: '#6b7280' }}>
+                        {index + 1}
+                      </td>
+                      <td className="border-0 text-dark fw-medium d-none d-lg-table-cell" style={{ fontSize: '11px' }}>
+                        <i className="bi bi-building me-1 text-muted"></i>{comp.nombre_laboratorio || 'SIN ASIGNAR'}
+                      </td>
+                      <td className="border-0 text-dark fw-medium d-none d-lg-table-cell" style={{ fontSize: '11px' }}>
+                        <i className="bi bi-building me-1 text-muted"></i>{areaNombre || 'SIN ASIGNAR'}
+                      </td>
+                      <td className="border-0 text-dark fw-medium d-none d-lg-table-cell" style={{ fontSize: '11px' }}>
+                        <i className="bi bi-person me-1 text-muted"></i>{personaNombre || 'SIN ASIGNAR'}
+                      </td>
+                      <td className="border-0 text-end pe-2 pe-md-3 rounded-end-3">
+                        <button onClick={() => setQrEquipoCodigo(comp.codigo_inventario)} className="btn btn-sm btn-link text-info p-1 rounded-3 me-1" title="Ver código QR">
+                          <i className="bi bi-qr-code fs-6"></i>
                         </button>
-                      )}
-                      {esAdmin && (
-                        <button onClick={() => abrirConfirmarEliminar(comp.id)} className="btn btn-sm btn-link text-danger p-1 hover-bg-danger rounded-3" title="Eliminar (solo administrador)">
-                          <i className="bi bi-trash3 fs-6"></i>
+                        <button onClick={() => abrirEditor(comp.id)} className="btn btn-sm btn-link text-warning p-1 rounded-3 me-1" title="Editar">
+                          <i className="bi bi-pencil fs-6"></i>
                         </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                        <button onClick={() => setPcSeleccionadaId(comp.id)} className="btn btn-sm btn-link text-primary p-1 rounded-3 me-1" title="Historial">
+                          <i className="bi bi-journal-text fs-6"></i>
+                        </button>
+                        {comp.persona_id && esAdmin && (
+                          <button onClick={() => abrirConfirmarDesasignar(comp.id)} className="btn btn-sm btn-link text-secondary p-1 rounded-3 me-1" title="Desasignar de esta persona (solo administrador)">
+                            <i className="bi bi-person-dash fs-6"></i>
+                          </button>
+                        )}
+                        {esAdmin && (
+                          <button onClick={() => abrirConfirmarEliminar(comp.id)} className="btn btn-sm btn-link text-danger p-1 hover-bg-danger rounded-3" title="Eliminar (solo administrador)">
+                            <i className="bi bi-trash3 fs-6"></i>
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-      {/* FIN DE LA TABLA CON SCROLL */}
-    </div>
-  );
-};
+    );
+  };
 
+  // ============================================================
+  // DASHBOARD COMPLETO (EQUIPOS)
+  // ============================================================
   const renderEquipos = () => (
     <>
       {/* KPI */}
@@ -1063,7 +1067,6 @@ margin: { left: 8, right: 8, bottom: 16 },
       </div>
 
       {/* FORM Y GRÁFICO */}
-     {/* FORM Y GRÁFICO */}
       <div className="row g-3 g-md-4 mb-4">
         <div className="col-12 col-lg-7">
           <div className="card border-0 rounded-4 bg-white p-3 p-md-4 shadow-sm h-100">
@@ -1078,7 +1081,7 @@ margin: { left: 8, right: 8, bottom: 16 },
                 onDatosConfirmados={(datosForm) => setForm(prev => ({ ...prev, ...datosForm }))}
               />
             </div>
-            <form onSubmit={guardarEquipo}></form>
+
             <form onSubmit={guardarEquipo}>
               <div className="row g-2 g-md-3">
                 <div className="col-12 col-md-4">
@@ -1312,7 +1315,7 @@ margin: { left: 8, right: 8, bottom: 16 },
   );
 
   // ============================================================
-  // RENDER CONTENIDO SEGÚN VISTA
+  // CONTENIDO SEGÚN VISTA
   // ============================================================
   const renderContenido = () => {
     switch (vistaActual) {
@@ -1348,40 +1351,38 @@ margin: { left: 8, right: 8, bottom: 16 },
           </>
         );
 
-     case 'personas':
-  if (!esAdmin) return renderEquipos();
+      case 'personas':
+        if (!esAdmin) return renderEquipos();
 
-  if (personaGestionId) {
-    return (
-      <PersonaDetalle
-        personaId={personaGestionId}
-        onVolver={() => setPersonaGestionId(null)}
-        esAdmin={esAdmin}
-        personas={dashboardData.personas}
-        personasOcupadas={personasOcupadas}
-        onPersonaChange={cargarInventario}
-      />
-    );
-  }
+        if (personaGestionId) {
+          return (
+            <PersonaDetalle
+              personaId={personaGestionId}
+              onVolver={() => setPersonaGestionId(null)}
+              esAdmin={esAdmin}
+              personas={dashboardData.personas}
+              personasOcupadas={personasOcupadas}
+              onPersonaChange={cargarInventario}
+            />
+          );
+        }
 
-  return (
-    <Personas
-      onPersonaChange={cargarInventario}
-      esAdmin={esAdmin}
-      onGestionar={setPersonaGestionId}
-    />
-  );
+        return (
+          <Personas
+            onPersonaChange={cargarInventario}
+            esAdmin={esAdmin}
+            onGestionar={setPersonaGestionId}
+          />
+        );
 
       case 'extras':
         return <Extras esAdmin={esAdmin} />;
 
       case 'catalogos':
-        // Módulo exclusivo de administradores
         if (!esAdmin) return renderEquipos();
         return <Catalogos onCatalogoChange={cargarCatalogos} />;
 
       case 'papelera':
-        // Módulo exclusivo de administradores
         if (!esAdmin) return renderEquipos();
         return <Papelera usuario={usuario} onCambio={cargarInventario} />;
 
@@ -1443,7 +1444,7 @@ margin: { left: 8, right: 8, bottom: 16 },
           <span
             className="navbar-brand fw-extrabold fs-5 tracking-tight d-flex align-items-center gap-2"
             style={{ cursor: 'pointer' }}
-            onClick={() => { setVistaActual('equipos'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
+            onClick={() => irA('equipos')}
           >
             <img src={logo} alt="Logo UTH" style={{ height: '32px', width: 'auto', borderRadius: '8px', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }} />
             <span className="text-white d-none d-sm-inline">UTH <span className="text-white-50 fw-light">|</span> TIC</span>
@@ -1470,54 +1471,54 @@ margin: { left: 8, right: 8, bottom: 16 },
             <div className="navbar-nav me-auto mb-2 mb-lg-0 d-flex flex-row gap-2 ms-0 ms-lg-4">
               <button
                 className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'equipos' && !pcSeleccionadaId && !equipoEditandoId ? 'nav-pill-active' : ''}`}
-                onClick={() => { setVistaActual('equipos'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
+                onClick={() => irA('equipos')}
               >
                 <i className="bi bi-pc-display me-2"></i>Equipos
               </button>
               <button
                 className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'laboratorios' ? 'nav-pill-active' : ''}`}
-                onClick={() => { setVistaActual('laboratorios'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
+                onClick={() => irA('laboratorios')}
               >
                 <i className="bi bi-building me-2"></i>Laboratorios
               </button>
               <button
                 className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'admin' ? 'nav-pill-active' : ''}`}
-                onClick={() => { setVistaActual('admin'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
+                onClick={() => irA('admin')}
               >
                 <i className="bi bi-shield-lock me-2"></i>Administrativo
               </button>
               {esAdmin && (
                 <button
                   className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'personas' ? 'nav-pill-active' : ''}`}
-                  onClick={() => { setVistaActual('personas'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
+                  onClick={() => irA('personas')}
                 >
-                  <i className="bi bi-people me-2"></i>Personal de trabajo 
+                  <i className="bi bi-people me-2"></i>Personal de trabajo
                 </button>
               )}
               <button
                 className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'extras' ? 'nav-pill-active' : ''}`}
-                onClick={() => { setVistaActual('extras'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
+                onClick={() => irA('extras')}
               >
                 <i className="bi bi-box-seam me-2"></i>Extras
               </button>
               {esAdmin && (
                 <button
                   className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'papelera' ? 'nav-pill-active' : ''}`}
-                  onClick={() => { setVistaActual('papelera'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
+                  onClick={() => irA('papelera')}
                 >
                   <i className="bi bi-clock-history me-2"></i>Historial
                 </button>
               )}
               <button
                 className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'escaner' ? 'nav-pill-active' : ''}`}
-                onClick={() => { setVistaActual('escaner'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
+                onClick={() => irA('escaner')}
               >
                 <i className="bi bi-qr-code-scan me-2"></i>Escanear QR
               </button>
               {esAdmin && (
                 <button
                   className={`btn btn-sm px-3 rounded-3 fw-semibold nav-pill ${vistaActual === 'catalogos' ? 'nav-pill-active' : ''}`}
-                  onClick={() => { setVistaActual('catalogos'); setPcSeleccionadaId(null); setEquipoEditandoId(null); setNavbarOpen(false); setLaboratorioSeleccionado(null); setAreaSeleccionada(null); setPersonaSeleccionada(null); }}
+                  onClick={() => irA('catalogos')}
                 >
                   <i className="bi bi-sliders me-2"></i>Catálogos
                 </button>
