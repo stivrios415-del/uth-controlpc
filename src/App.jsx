@@ -86,7 +86,7 @@ function App() {
   });
 
   // Detecta si el tipo seleccionado es Monitor, para mostrar solo Marca/Modelo/Serie
-  const esMonitor = form.tipo.toLowerCase().includes('monitor');
+  const esSinEspecificaciones = form.tipo.toLowerCase().includes('monitor') || form.tipo.toLowerCase().includes('n/a');
 
   // Atajo para saber si el usuario actual es administrador
   const esAdmin = usuario?.rol === 'admin';
@@ -248,7 +248,7 @@ function App() {
     if (!form.numero_serie.trim()) faltantes.push('SERIE');
 
     // Procesador, RAM, Disco y Año solo aplican para CPU/Laptop, no para Monitor
-    if (!esMonitor) {
+    if (!esSinEspecificaciones) {
       if (!form.procesador) faltantes.push('PROCESADOR');
       if (!form.ram_gb) faltantes.push('RAM (GB)');
       if (!form.disco) faltantes.push('DISCO');
@@ -329,10 +329,10 @@ function App() {
       numero_serie: form.numero_serie || null,
       // Los CPU/Laptop llevan procesador, RAM, disco y año.
       // Los Monitores solo llevan marca, modelo y serie.
-      procesador: esMonitor ? null : (form.procesador || null),
-      ram_gb: esMonitor ? null : ramValue,
-      disco: esMonitor ? null : (form.disco || null),
-      ano: esMonitor ? null : (form.ano ? parseInt(form.ano) : null),
+      procesador: esSinEspecificaciones ? null : (form.procesador || null),
+      ram_gb: esSinEspecificaciones ? null : ramValue,
+      disco: esSinEspecificaciones ? null : (form.disco || null),
+      ano: esSinEspecificaciones ? null : (form.ano ? parseInt(form.ano) : null),
       estado: form.estado,
       laboratorio_id: laboratorioId,
       area_id: areaId,
@@ -1122,7 +1122,7 @@ function App() {
                     ))}
                   </select>
                 </div>
-                <div className={esMonitor ? 'col-12' : 'col-12 col-md-4'}>
+                <div className={esSinEspecificaciones ? 'col-12' : 'col-12 col-md-4'}>
                   <label className="form-label text-secondary small fw-semibold">SERIE</label>
                   <input
                     type="text"
@@ -1135,7 +1135,7 @@ function App() {
                   />
                   <small className="text-muted d-block mt-1">{form.numero_serie.length}/50</small>
                 </div>
-                {!esMonitor && (
+                {!esSinEspecificaciones && (
                   <>
                     <div className="col-12 col-md-4">
                       <label className="form-label text-secondary small fw-semibold">PROCESADOR</label>
