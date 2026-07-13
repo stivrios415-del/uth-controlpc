@@ -22,6 +22,7 @@ function EditarEquipo({ equipoId, onVolver }) {
   const [laboratorios, setLaboratorios] = useState([]);
   const [areas, setAreas] = useState([]);
   const [personas, setPersonas] = useState([]);
+  const [personasOcupadas, setPersonasOcupadas] = useState(new Set());
   const [catalogos, setCatalogos] = useState({
     tipos: [],
     marcas: [],
@@ -35,8 +36,8 @@ function EditarEquipo({ equipoId, onVolver }) {
   const [enviando, setEnviando] = useState(false);
   const [exito, setExito] = useState(false);
 
-  // Detecta si el tipo actual es Monitor, para ocultar Procesador/RAM/Disco/Año
-  const esMonitor = form.tipo.toLowerCase().includes('monitor');
+  // Detecta tipos que no requieren especificaciones técnicas (Monitor o CPU N/A)
+  const esSinEspecificaciones = form.tipo.toLowerCase().includes('monitor') || form.tipo.toLowerCase().includes('n/a');
 
   const cargarDatos = useCallback(async () => {
     try {
@@ -54,6 +55,7 @@ function EditarEquipo({ equipoId, onVolver }) {
         { data: procesadores, error: procesadoresError },
         { data: ramOpciones, error: ramError },
         { data: discos, error: discosError },
+        { data: equiposConPersona, error: equiposConPersonaError },
       ] = await Promise.all([
         supabase.from('computadoras').select('*').eq('id', equipoId).single(),
         supabase.from('laboratorios').select('*').order('nombre'),
@@ -65,6 +67,7 @@ function EditarEquipo({ equipoId, onVolver }) {
         supabase.from('procesadores').select('*').order('orden'),
         supabase.from('ram_opciones').select('*').order('orden'),
         supabase.from('discos').select('*').order('orden'),
+        supabase.from('computadoras').select('id, persona_id').eq('eliminado', false).not('persona_id', 'is', null),
       ]);
 
       if (eqError) throw eqError;
@@ -82,6 +85,17 @@ function EditarEquipo({ equipoId, onVolver }) {
         ram_opciones: ramError ? [] : (ramOpciones || []),
         discos: discosError ? [] : (discos || []),
       });
+
+      // Personas que ya tienen otro equipo activo asignado (excluyendo este mismo equipo,
+      // ya que su propia persona asignada no cuenta como "duplicado")
+      if (!equiposConPersonaError && equiposConPersona) {
+        const ocupadas = new Set(
+          equiposConPersona
+            .filter(c => c.id !== parseInt(equipoId))
+            .map(c => c.persona_id)
+        );
+        setPersonasOcupadas(ocupadas);
+      }
 
       // Reconstruye el valor combinado de UBICACIÓN a partir de lo que ya tenía el equipo
       let ubicacionActual = '';
@@ -140,7 +154,7 @@ function EditarEquipo({ equipoId, onVolver }) {
     if (!form.modelo.trim()) faltantes.push('MODELO');
     if (!form.numero_serie.trim()) faltantes.push('SERIE');
 
-    if (!esMonitor) {
+    if (!esSinEspecificaciones) {
       if (!form.procesador.trim()) faltantes.push('PROCESADOR');
       if (!form.ram_gb) faltantes.push('RAM (GB)');
       if (!form.disco.trim()) faltantes.push('DISCO');
@@ -187,6 +201,27 @@ function EditarEquipo({ equipoId, onVolver }) {
       const personaIdNueva = (areaId && form.persona_id) ? parseInt(form.persona_id) : null;
       const personaIdOriginal = equipoOriginal?.persona_id || null;
 
+      // Verificación de último momento contra la base de datos: si la persona cambió,
+      // confirma que esa persona no tenga ya otro equipo activo asignado.
+      if (personaIdNueva && personaIdNueva !== personaIdOriginal) {
+        const { data: equipoExistente } = await supabase
+          .from('computadoras')
+          .select('id, codigo_inventario')
+          .eq('persona_id', personaIdNueva)
+          .eq('eliminado', false)
+          .neq('id', equipoId)
+          .limit(1);
+
+        if (equipoExistente && equipoExistente.length > 0) {
+          alert(
+            `⚠️ Esta persona ya tiene un equipo activo asignado (${equipoExistente[0].codigo_inventario}).\n\n` +
+            'No se puede asignar un segundo equipo hasta liberar el actual.'
+          );
+          setEnviando(false);
+          return;
+        }
+      }
+
       // Solo actualiza fecha_asignacion si la persona asignada realmente cambió
       let fechaAsignacion = equipoOriginal?.fecha_asignacion || null;
       if (personaIdNueva !== personaIdOriginal) {
@@ -198,10 +233,10 @@ function EditarEquipo({ equipoId, onVolver }) {
         marca: form.marca || null,
         modelo: form.modelo || null,
         numero_serie: form.numero_serie || null,
-        procesador: esMonitor ? null : (form.procesador || null),
-        ram_gb: esMonitor ? null : (form.ram_gb ? parseInt(form.ram_gb) : null),
-        disco: esMonitor ? null : (form.disco || null),
-        ano: esMonitor ? null : (form.ano ? parseInt(form.ano) : null),
+        procesador: esSinEspecificaciones ? null : (form.procesador || null),
+        ram_gb: esSinEspecificaciones ? null : (form.ram_gb ? parseInt(form.ram_gb) : null),
+        disco: esSinEspecificaciones ? null : (form.disco || null),
+        ano: esSinEspecificaciones ? null : (form.ano ? parseInt(form.ano) : null),
         estado: form.estado,
         laboratorio_id: laboratorioId,
         area_id: areaId,
@@ -331,7 +366,7 @@ function EditarEquipo({ equipoId, onVolver }) {
               <small className="text-muted d-block mt-1">{form.numero_serie.length}/50</small>
             </div>
 
-            {!esMonitor && (
+            {!esSinEspecificaciones && (
               <>
                 <div className="col-12">
                   <label className="form-label fw-semibold text-secondary small">Procesador</label>
@@ -444,12 +479,14 @@ function EditarEquipo({ equipoId, onVolver }) {
                   onChange={handleChange}
                 >
                   <option value="">⚠️ -- Sin Asignar --</option>
-                  {personas.map(persona => (
-                    <option key={persona.id} value={persona.id}>👤 {persona.nombre}</option>
-                  ))}
+                  {personas
+                    .filter(persona => !personasOcupadas.has(persona.id))
+                    .map(persona => (
+                      <option key={persona.id} value={persona.id}>👤 {persona.nombre}</option>
+                    ))}
                 </select>
                 <small className="text-muted d-block mt-1">
-                  Si cambias la persona asignada, se registrará la fecha actual.
+                  Si cambias la persona asignada, se registrará la fecha actual. Solo se muestran personas sin otro equipo activo.
                 </small>
               </div>
             )}
