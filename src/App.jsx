@@ -38,6 +38,15 @@ const INITIAL_FORM_STATE = {
   notas: ''
 };
 
+// Helper para saber si un tipo cuenta como "Monitor" en la categoría de
+// ocupación (para no permitir 2 equipos del mismo tipo por persona).
+// OJO: "N/A" NO es un monitor, es un CPU/equipo genérico sin specs
+// (ej. impresora, N/A, etc.) — cuenta como categoría "CPU".
+const esCategoriaMonitor = (tipo) => {
+  const t = (tipo || '').toLowerCase();
+  return t.includes('monitor');
+};
+
 function App() {
   // ==================== ESTADOS ====================
   const [usuario, setUsuario] = useState(null);
@@ -85,7 +94,8 @@ function App() {
     discos: [],
   });
 
-  // Detecta si el tipo seleccionado es Monitor, para mostrar solo Marca/Modelo/Serie
+  // Detecta si el tipo seleccionado es Monitor o N/A, para mostrar solo Marca/Modelo/Serie
+  // (oculta procesador/RAM/disco/año en el formulario, sin afectar la categoría de ocupación)
   const esSinEspecificaciones = form.tipo.toLowerCase().includes('monitor') || form.tipo.toLowerCase().includes('n/a');
 
   // Atajo para saber si el usuario actual es administrador
@@ -247,7 +257,7 @@ function App() {
     if (!form.modelo) faltantes.push('MODELO');
     if (!form.numero_serie.trim()) faltantes.push('SERIE');
 
-    // Procesador, RAM, Disco y Año solo aplican para CPU/Laptop, no para Monitor
+    // Procesador, RAM, Disco y Año solo aplican para CPU/Laptop, no para Monitor/N-A
     if (!esSinEspecificaciones) {
       if (!form.procesador) faltantes.push('PROCESADOR');
       if (!form.ram_gb) faltantes.push('RAM (GB)');
@@ -301,18 +311,22 @@ function App() {
 
     // Verificación de último momento contra la base de datos (no solo la lista en pantalla),
     // por si otra persona asignó a este mismo colaborador justo antes de que guardaras.
+    // Se compara por CATEGORÍA: un CPU/N-A no choca con un Monitor ya asignado, y viceversa.
     if (areaId && form.persona_id) {
-      const { data: equipoExistente } = await supabase
+      const { data: equiposExistentes } = await supabase
         .from('computadoras')
-        .select('id, codigo_inventario')
+        .select('id, codigo_inventario, tipo')
         .eq('persona_id', parseInt(form.persona_id))
-        .eq('eliminado', false)
-        .limit(1);
+        .eq('eliminado', false);
 
-      if (equipoExistente && equipoExistente.length > 0) {
+      const conflicto = (equiposExistentes || []).find(
+        eq => esCategoriaMonitor(eq.tipo) === formEsCategoriaMonitor
+      );
+
+      if (conflicto) {
         alert(
-          `⚠️ Esta persona ya tiene un equipo activo asignado (${equipoExistente[0].codigo_inventario}).\n\n` +
-          'No se puede asignar un segundo equipo hasta liberar el actual.'
+          `⚠️ Esta persona ya tiene un ${formEsCategoriaMonitor ? 'MONITOR' : 'CPU/Laptop'} activo asignado (${conflicto.codigo_inventario}).\n\n` +
+          'No se puede asignar otro equipo del mismo tipo hasta liberar el actual.'
         );
         setSubmitting(false);
         return;
@@ -328,7 +342,7 @@ function App() {
       modelo: form.modelo || null,
       numero_serie: form.numero_serie || null,
       // Los CPU/Laptop llevan procesador, RAM, disco y año.
-      // Los Monitores solo llevan marca, modelo y serie.
+      // Los Monitores y N/A solo llevan marca, modelo y serie.
       procesador: esSinEspecificaciones ? null : (form.procesador || null),
       ram_gb: esSinEspecificaciones ? null : ramValue,
       disco: esSinEspecificaciones ? null : (form.disco || null),
@@ -535,14 +549,40 @@ function App() {
     );
   }, [computadoras, busqueda, dashboardData.personas]);
 
-  // Personas que YA tienen un equipo activo asignado (para no permitir duplicados).
-  const personasOcupadas = useMemo(() => {
+  // Personas que YA tienen un MONITOR activo asignado (solo tipo "Monitor")
+  const personasConMonitor = useMemo(() => {
     const ids = new Set();
     computadoras.forEach(c => {
-      if (c.persona_id) ids.add(c.persona_id);
+      if (c.persona_id && esCategoriaMonitor(c.tipo)) ids.add(c.persona_id);
     });
     return ids;
   }, [computadoras]);
+
+  // Personas que YA tienen un CPU/Laptop/N-A activo asignado (todo lo que no es Monitor)
+  const personasConCPU = useMemo(() => {
+    const ids = new Set();
+    computadoras.forEach(c => {
+      if (c.persona_id && !esCategoriaMonitor(c.tipo)) ids.add(c.persona_id);
+    });
+    return ids;
+  }, [computadoras]);
+
+  // Personas que YA tienen tanto CPU/Laptop como Monitor asignado (completas)
+  const personasCompletas = useMemo(() => {
+    const ids = new Set();
+    dashboardData.personas.forEach(p => {
+      if (personasConMonitor.has(p.id) && personasConCPU.has(p.id)) ids.add(p.id);
+    });
+    return ids;
+  }, [dashboardData.personas, personasConMonitor, personasConCPU]);
+
+  // Bandera específica de OCUPACIÓN (distinta de esSinEspecificaciones, que solo
+  // controla qué campos mostrar). "N/A" cuenta como CPU aquí, no como Monitor.
+  const formEsCategoriaMonitor = esCategoriaMonitor(form.tipo);
+
+  // Set que se usa en el formulario de "Registrar Nuevo Activo": depende de si
+  // se está registrando un Monitor o un CPU/Laptop/N-A, para no repetir el mismo tipo.
+  const personasOcupadas = formEsCategoriaMonitor ? personasConMonitor : personasConCPU;
 
   const datosGrafico = useMemo(() => ({
     labels: ['Operativos', 'Mantenimiento', 'Dañados'],
@@ -1215,12 +1255,20 @@ function App() {
                       <option value="">⚠️ -- Sin Asignar --</option>
                       {dashboardData.personas
                         .filter(persona => !personasOcupadas.has(persona.id))
-                        .map(persona => (
-                          <option key={persona.id} value={persona.id}>👤 {persona.nombre}</option>
-                        ))}
+                        .map(persona => {
+                          const tieneOtroTipo = formEsCategoriaMonitor
+                            ? personasConCPU.has(persona.id)
+                            : personasConMonitor.has(persona.id);
+                          return (
+                            <option key={persona.id} value={persona.id}>
+                              👤 {persona.nombre}{tieneOtroTipo ? '' : (formEsCategoriaMonitor ? ' (sin CPU aún)' : ' (sin monitor aún)')}
+                            </option>
+                          );
+                        })}
                     </select>
                     <small className="text-muted d-block mt-1">
-                      Al seleccionar, se registrará la fecha actual. Solo se muestran personas sin equipo activo asignado.
+                      Al seleccionar, se registrará la fecha actual. Solo se muestran personas sin{' '}
+                      {formEsCategoriaMonitor ? 'monitor' : 'CPU/Laptop'} activo asignado.
                     </small>
                   </div>
                 )}
@@ -1361,7 +1409,7 @@ function App() {
               onVolver={() => setPersonaGestionId(null)}
               esAdmin={esAdmin}
               personas={dashboardData.personas}
-              personasOcupadas={personasOcupadas}
+              personasOcupadas={personasCompletas}
               onPersonaChange={cargarInventario}
             />
           );
