@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
-import { startRegistration } from '@simplewebauthn/browser';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
@@ -21,6 +20,7 @@ import { supabase } from './supabaseClient';
 import PersonaDetalle from './PersonasDetalle';
 import logo from './logo.png';
 import RegistroPorVoz from './RegistroporVoz';
+import { startRegistration } from '@simplewebauthn/browser';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -472,7 +472,7 @@ function App() {
     }
   };
 
-  
+
   const registrarPasskey = async () => {
   if (registrandoPasskey) return;
   if (!usuario) {
