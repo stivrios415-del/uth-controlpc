@@ -471,17 +471,13 @@ function App() {
       setEnviandoDesasignacion(false);
     }
   };
-const registrarPasskey = async () => {
-  // Prevención de ejecuciones múltiples
+  const registrarPasskey = async () => {
   if (registrandoPasskey) return;
-
-  // Verificar sesión de usuario
   if (!usuario) {
     alert('⚠️ Debes iniciar sesión con correo y contraseña antes de registrar un acceso biométrico.');
     return;
   }
 
-  // Detectar soporte de WebAuthn
   if (!window.PublicKeyCredential) {
     alert('❌ Tu navegador no soporta autenticación biométrica. Usa Chrome, Edge o Safari actualizado.');
     return;
@@ -490,47 +486,36 @@ const registrarPasskey = async () => {
   setRegistrandoPasskey(true);
 
   try {
-    // 1️⃣ Configurar las opciones de registro forzando el autenticador de PLATAFORMA
-    //    Esto evita que te pida llave USB o código QR.
-    const options = {
+    // 1️⃣ Llamada directa a Supabase sin modificar opciones manualmente
+    //    Dejamos que Supabase construya las opciones por defecto.
+    const { data, error } = await supabase.auth.registerPasskey({
       email: usuario.email,
-      // El objeto 'options' se pasa directamente a la API de WebAuthn
-      options: {
-        authenticatorSelection: {
-          authenticatorAttachment: 'platform', // <--- CLAVE: fuerza el biométrico del dispositivo
-          residentKey: 'required',              // Almacena la clave en el dispositivo
-          userVerification: 'required',         // Exige PIN/huella/rostro
-        },
-        // También puedes añadir 'timeout' si quieres (milisegundos)
-        // timeout: 60000,
-      },
-    };
-
-    // 2️⃣ Llamar al método de Supabase que maneja TODO el flujo (obtener challenge, crear credencial, registrar)
-    //    Devuelve un objeto con la información del passkey registrado.
-    const { data, error } = await supabase.auth.registerPasskey(options);
+      // Si quieres añadir un nombre amigable para el dispositivo:
+      // name: `Dispositivo de ${usuario.nombre}`,
+    });
 
     if (error) {
       console.error('Error al registrar passkey:', error);
-      // Manejar errores específicos de WebAuthn (el navegador los lanza como 'error.message')
-      if (error.message.includes('NotAllowedError')) {
-        alert('❌ Cancelaste el registro o tu dispositivo no tiene un autenticador biométrico configurado.\n\n' +
-              'Asegúrate de tener Windows Hello, Touch ID o Face ID activado.');
-      } else if (error.message.includes('AbortError')) {
-        alert('⏱️ La operación tardó demasiado. Vuelve a intentarlo.');
+
+      // Manejo específico de errores de WebAuthn
+      if (error.message?.includes('NotAllowedError')) {
+        alert('❌ Cancelaste el proceso o tu dispositivo no tiene un autenticador biométrico configurado.\n\n' +
+              '✅ Asegúrate de tener Windows Hello (PIN + huella) o Touch ID / Face ID activado.\n' +
+              '✅ Si usas Windows, ve a Configuración > Cuentas > Opciones de inicio de sesión y configura un PIN.');
+      } else if (error.message?.includes('AbortError')) {
+        alert('⏱️ La operación tardó demasiado. Vuelve a intentarlo y no cambies de pestaña.');
       } else {
-        alert(`❌ Error: ${error.message}`);
+        alert(`❌ Error: ${error.message || 'Intenta de nuevo más tarde.'}`);
       }
       return;
     }
 
-    // 3️⃣ Éxito
+    // 2️⃣ Éxito
     alert('✅ ¡Acceso biométrico activado! Ya puedes iniciar sesión con tu huella, Face ID o PIN.');
 
   } catch (err) {
-    // Captura cualquier error inesperado (ej. problemas de red)
     console.error('Error inesperado:', err);
-    alert(`❌ Ocurrió un error inesperado: ${err.message || 'Intenta de nuevo más tarde.'}`);
+    alert(`❌ Ocurrió un error inesperado: ${err.message || 'Intenta de nuevo.'}`);
   } finally {
     setRegistrandoPasskey(false);
   }
