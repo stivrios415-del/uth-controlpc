@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Modal } from 'react-bootstrap';
 import { supabase } from './supabaseClient';
-import { Mail, Lock, User, Eye, EyeOff, ShieldCheck, UserPlus, ArrowRight } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, ShieldCheck, UserPlus, ArrowRight, Fingerprint } from 'lucide-react';
 import logoUth from './logo.png';
 import fondoImg from './fondo.jpg';
 
@@ -13,6 +13,7 @@ export default function Login({ onLoginSuccess }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loadingLogin, setLoadingLogin] = useState(false);
+  const [loadingPasskey, setLoadingPasskey] = useState(false);
 
   // Estados para el Modal de Registro
   const [showModal, setShowModal] = useState(false);
@@ -36,6 +37,73 @@ export default function Login({ onLoginSuccess }) {
     }
   };
 
+  // ==================== ARMAR PERFIL DE USUARIO (compartido) ====================
+  // Se usa tanto para login con contraseña como para login con Passkey, para no
+  // repetir la lógica de "buscar perfil / crearlo si no existe".
+  const resolverPerfilYContinuar = async (authUser) => {
+    const { data: perfil, error: perfilError } = await supabase
+      .from('perfiles')
+      .select('nombre, rol')
+      .eq('id', authUser.id)
+      .maybeSingle();
+
+    if (perfilError) {
+      console.error('Error al obtener perfil:', perfilError);
+      showAlert('danger', 'Error al obtener el perfil del usuario.');
+      return;
+    }
+
+    if (!perfil) {
+      const nombre = authUser.user_metadata?.nombre || 'Usuario';
+
+      const { error: insertError } = await supabase
+        .from('perfiles')
+        .insert([{ id: authUser.id, nombre: nombre, rol: 'usuario' }]);
+
+      if (insertError) {
+        console.error('Error al crear perfil:', insertError);
+        showAlert('danger', 'No se pudo crear el perfil del usuario.');
+        return;
+      }
+
+      const { data: newPerfil, error: newPerfilError } = await supabase
+        .from('perfiles')
+        .select('nombre, rol')
+        .eq('id', authUser.id)
+        .single();
+
+      if (newPerfilError) {
+        showAlert('danger', 'Perfil creado pero no se pudo obtener.');
+        return;
+      }
+
+      const userData = {
+        id: authUser.id,
+        email: authUser.email,
+        nombre: newPerfil.nombre,
+        rol: newPerfil.rol,
+      };
+
+      showAlert('success', `¡Bienvenido, ${userData.nombre}!`);
+      if (onLoginSuccess) {
+        setTimeout(() => onLoginSuccess(userData), 800);
+      }
+      return;
+    }
+
+    const userData = {
+      id: authUser.id,
+      email: authUser.email,
+      nombre: perfil.nombre,
+      rol: perfil.rol,
+    };
+
+    showAlert('success', `¡Bienvenido de nuevo, ${userData.nombre}!`);
+    if (onLoginSuccess) {
+      setTimeout(() => onLoginSuccess(userData), 800);
+    }
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoadingLogin(true);
@@ -53,77 +121,35 @@ export default function Login({ onLoginSuccess }) {
         return;
       }
 
-      const { data: perfil, error: perfilError } = await supabase
-        .from('perfiles')
-        .select('nombre, rol')
-        .eq('id', data.user.id)
-        .maybeSingle();
-
-      if (perfilError) {
-        console.error('Error al obtener perfil:', perfilError);
-        showAlert('danger', 'Error al obtener el perfil del usuario.');
-        setLoadingLogin(false);
-        return;
-      }
-
-      if (!perfil) {
-        console.log('Perfil no encontrado, creando uno automáticamente...');
-        const nombre = data.user.user_metadata?.nombre || 'Usuario';
-        
-        const { error: insertError } = await supabase
-          .from('perfiles')
-          .insert([{ id: data.user.id, nombre: nombre, rol: 'usuario' }]);
-
-        if (insertError) {
-          console.error('Error al crear perfil:', insertError);
-          showAlert('danger', 'No se pudo crear el perfil del usuario.');
-          setLoadingLogin(false);
-          return;
-        }
-
-        const { data: newPerfil, error: newPerfilError } = await supabase
-          .from('perfiles')
-          .select('nombre, rol')
-          .eq('id', data.user.id)
-          .single();
-
-        if (newPerfilError) {
-          showAlert('danger', 'Perfil creado pero no se pudo obtener.');
-          setLoadingLogin(false);
-          return;
-        }
-
-        const userData = {
-          id: data.user.id,
-          email: data.user.email,
-          nombre: newPerfil.nombre,
-          rol: newPerfil.rol,
-        };
-
-        showAlert('success', `¡Bienvenido, ${userData.nombre}!`);
-        if (onLoginSuccess) {
-          setTimeout(() => onLoginSuccess(userData), 1000);
-        }
-        setLoadingLogin(false);
-        return;
-      }
-
-      const userData = {
-        id: data.user.id,
-        email: data.user.email,
-        nombre: perfil.nombre,
-        rol: perfil.rol,
-      };
-
-      showAlert('success', `¡Bienvenido de nuevo, ${userData.nombre}!`);
-      if (onLoginSuccess) {
-        setTimeout(() => onLoginSuccess(userData), 1000);
-      }
+      await resolverPerfilYContinuar(data.user);
     } catch (error) {
       console.error('Error en login:', error);
       showAlert('danger', 'Error de conexión con el servidor de autenticación.');
     } finally {
       setLoadingLogin(false);
+    }
+  };
+
+  // ==================== LOGIN CON PASSKEY (Face ID / Huella / PIN) ====================
+  const handlePasskeyLogin = async () => {
+    setLoadingPasskey(true);
+    setAlertMessage({ type: '', text: '' });
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPasskey();
+
+      if (error) {
+        showAlert('danger', error.message || 'No se pudo verificar tu identidad biométrica.');
+        setLoadingPasskey(false);
+        return;
+      }
+
+      await resolverPerfilYContinuar(data.user);
+    } catch (error) {
+      console.error('Error en login con passkey:', error);
+      showAlert('danger', 'Este dispositivo o navegador no soporta acceso biométrico, o la verificación falló.');
+    } finally {
+      setLoadingPasskey(false);
     }
   };
 
@@ -267,13 +293,33 @@ export default function Login({ onLoginSuccess }) {
               </div>
             </div>
 
-            <button type="submit" className="btn-login" disabled={loadingLogin}>
+            <button type="submit" className="btn-login" disabled={loadingLogin || loadingPasskey}>
               {loadingLogin ? (
                 <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
               ) : null}
               {loadingLogin ? 'Validando...' : 'Acceder al Sistema'}
             </button>
           </form>
+
+          {/* DIVISOR */}
+          <div className="divider-o">
+            <span>o</span>
+          </div>
+
+          {/* LOGIN CON PASSKEY (Face ID / Huella / PIN) */}
+          <button
+            type="button"
+            className="btn-biometric"
+            onClick={handlePasskeyLogin}
+            disabled={loadingLogin || loadingPasskey}
+          >
+            {loadingPasskey ? (
+              <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            ) : (
+              <Fingerprint size={18} className="me-2" />
+            )}
+            {loadingPasskey ? 'Verificando...' : 'Entrar con Face ID / Huella / PIN'}
+          </button>
 
           <div className="text-center mt-4">
             <button
@@ -589,6 +635,50 @@ export default function Login({ onLoginSuccess }) {
           color: #9ca3af !important;
           cursor: not-allowed;
           box-shadow: none;
+        }
+        .divider-o {
+          display: flex;
+          align-items: center;
+          text-align: center;
+          margin: 18px 0;
+          color: #9ca3af;
+          font-size: 0.75rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .divider-o::before,
+        .divider-o::after {
+          content: '';
+          flex: 1;
+          border-bottom: 1px solid #e5e7eb;
+        }
+        .divider-o span {
+          padding: 0 12px;
+        }
+        .btn-biometric {
+          background: #ffffff !important;
+          border: 1.5px solid #065f46 !important;
+          color: #065f46 !important;
+          font-weight: 700;
+          padding: 13px;
+          border-radius: 12px !important;
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.25s ease;
+          font-size: 0.85rem;
+          letter-spacing: 0.4px;
+        }
+        .btn-biometric:hover:not(:disabled) {
+          background: #ecfdf5 !important;
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+        }
+        .btn-biometric:disabled {
+          border-color: #d1d5db !important;
+          color: #9ca3af !important;
+          cursor: not-allowed;
         }
         .error-alert, .success-alert {
           padding: 12px 16px;
