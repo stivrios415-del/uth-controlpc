@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
+import { startRegistration } from '@simplewebauthn/browser';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
@@ -470,15 +471,15 @@ function App() {
       setEnviandoDesasignacion(false);
     }
   };
-// ==================== REGISTRO DE PASSKEY (NUEVO) ====================
-const registrarPasskey = async () => {
+
+  
+  const registrarPasskey = async () => {
   if (registrandoPasskey) return;
   if (!usuario) {
     alert('⚠️ Debes iniciar sesión con correo y contraseña antes de registrar un acceso biométrico.');
     return;
   }
 
-  // Verificar que el navegador soporte WebAuthn
   if (!window.PublicKeyCredential) {
     alert('❌ Tu navegador no soporta autenticación biométrica. Usa Chrome, Edge o Safari actualizado.');
     return;
@@ -486,24 +487,58 @@ const registrarPasskey = async () => {
 
   setRegistrandoPasskey(true);
   try {
-    // Llamada a Supabase para registrar un nuevo passkey asociado al usuario actual
-    // FORZAMOS el autenticador de plataforma (huella, Face ID, PIN, etc.)
-    const { data, error } = await supabase.auth.registerPasskey({
+    // 1. Obtener las opciones de registro desde Supabase
+    //    Supabase necesita el email del usuario para generar las opciones
+    const { data: optionsData, error: optionsError } = await supabase.auth.registerPasskey({
       email: usuario.email,
-      authenticatorAttachment: 'platform', // <-- NUEVO: solo autenticador integrado
-      userVerification: 'required',        // <-- NUEVO: exige verificación (PIN/huella)
     });
 
-    if (error) {
-      console.error('Error al registrar passkey:', error);
-      alert(`❌ No se pudo registrar el acceso biométrico: ${error.message}`);
+    if (optionsError) {
+      console.error('Error al obtener opciones de registro:', optionsError);
+      alert(`❌ No se pudieron obtener las opciones: ${optionsError.message}`);
+      return;
+    }
+
+    // 2. Forzar que el autenticador sea de PLATFORMA (integrado) y no roaming (USB/NFC)
+    //    optionsData es el objeto que Supabase genera (con challenge, rp, user, etc.)
+    const publicKey = optionsData.publicKey;
+
+    // Añadimos o sobrescribimos la propiedad authenticatorSelection
+    publicKey.authenticatorSelection = {
+      ...publicKey.authenticatorSelection,
+      authenticatorAttachment: 'platform', // <--- CLAVE: fuerza el autenticador del dispositivo
+      residentKey: 'required', // para que la clave se almacene en el dispositivo (descubierta)
+      userVerification: 'required', // exige verificación biométrica o PIN
+    };
+
+    // 3. Llamar a la función de registro de SimpleWebAuthn
+    const attResp = await startRegistration({
+      optionsJSON: publicKey, // pasamos las opciones modificadas
+    });
+
+    // 4. Enviar la respuesta al servidor (Supabase) para completar el registro
+    const { data: registered, error: registerError } = await supabase.auth.registerPasskey({
+      email: usuario.email,
+      // La respuesta de startRegistration incluye id, rawId, response, etc.
+      // Supabase espera un objeto con las credenciales
+      credential: attResp,
+    });
+
+    if (registerError) {
+      console.error('Error al completar el registro:', registerError);
+      alert(`❌ No se pudo completar el registro: ${registerError.message}`);
       return;
     }
 
     alert('✅ ¡Acceso biométrico activado! Ya puedes iniciar sesión con tu huella, Face ID o PIN.');
   } catch (err) {
     console.error('Error inesperado:', err);
-    alert('❌ Ocurrió un error inesperado. Intenta de nuevo más tarde.');
+    // Si el error es porque el usuario canceló, mostramos un mensaje más amigable
+    if (err.name === 'AbortError' || err.message.includes('cancel')) {
+      alert('ℹ️ Operación cancelada por el usuario.');
+    } else {
+      alert(`❌ Ocurrió un error inesperado: ${err.message || 'Intenta de nuevo más tarde.'}`);
+    }
   } finally {
     setRegistrandoPasskey(false);
   }
