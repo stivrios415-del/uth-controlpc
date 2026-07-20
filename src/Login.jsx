@@ -38,8 +38,6 @@ export default function Login({ onLoginSuccess }) {
   };
 
   // ==================== ARMAR PERFIL DE USUARIO (compartido) ====================
-  // Se usa tanto para login con contraseña como para login con Passkey, para no
-  // repetir la lógica de "buscar perfil / crearlo si no existe".
   const resolverPerfilYContinuar = async (authUser) => {
     const { data: perfil, error: perfilError } = await supabase
       .from('perfiles')
@@ -132,18 +130,44 @@ export default function Login({ onLoginSuccess }) {
 
   // ==================== LOGIN CON PASSKEY (Face ID / Huella / PIN) ====================
   const handlePasskeyLogin = async () => {
+    // 🔥 Validar que haya un email ingresado
+    if (!correo || !correo.includes('@')) {
+      showAlert('danger', '⚠️ Ingresa tu correo electrónico antes de usar el acceso biométrico.');
+      return;
+    }
+
     setLoadingPasskey(true);
     setAlertMessage({ type: '', text: '' });
 
     try {
-      const { data, error } = await supabase.auth.signInWithPasskey();
+      // 🔥 Pasar el email a signInWithPasskey
+      const { data, error } = await supabase.auth.signInWithPasskey({
+        email: correo,
+      });
 
       if (error) {
-        showAlert('danger', error.message || 'No se pudo verificar tu identidad biométrica.');
+        console.error('Error en passkey login:', error);
+
+        // Manejar errores específicos
+        if (error.message?.includes('NotAllowedError')) {
+          showAlert('danger',
+            '❌ No se pudo iniciar sesión con passkey.\n\n' +
+            'Asegúrate de:\n' +
+            '1️⃣ Tener Windows Hello (PIN + huella) o Touch ID / Face ID configurado.\n' +
+            '2️⃣ Haber registrado tu passkey previamente con el botón "Activar biométrico" en el panel (solo administradores).\n' +
+            '3️⃣ No haber cancelado el proceso.\n\n' +
+            'Si no has registrado tu passkey, inicia sesión con correo y contraseña y ve al panel para activarlo.'
+          );
+        } else if (error.message?.includes('AbortError')) {
+          showAlert('danger', '⏱️ La operación tardó demasiado. Vuelve a intentarlo.');
+        } else {
+          showAlert('danger', error.message || 'Error al verificar tu identidad biométrica.');
+        }
         setLoadingPasskey(false);
         return;
       }
 
+      // Procesar el perfil del usuario
       await resolverPerfilYContinuar(data.user);
     } catch (error) {
       console.error('Error en login con passkey:', error);
