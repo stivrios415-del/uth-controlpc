@@ -471,6 +471,7 @@ function App() {
       setEnviandoDesasignacion(false);
     }
   };
+  
   const registrarPasskey = async () => {
   if (registrandoPasskey) return;
   if (!usuario) {
