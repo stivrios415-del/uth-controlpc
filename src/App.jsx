@@ -38,10 +38,7 @@ const INITIAL_FORM_STATE = {
   notas: ''
 };
 
-// Helper para saber si un tipo cuenta como "Monitor" en la categoría de
-// ocupación (para no permitir 2 equipos del mismo tipo por persona).
-// OJO: "N/A" NO es un monitor, es un CPU/equipo genérico sin specs
-// (ej. impresora, N/A, etc.) — cuenta como categoría "CPU".
+// Helper para saber si un tipo cuenta como "Monitor" en la categoría de ocupación
 const esCategoriaMonitor = (tipo) => {
   const t = (tipo || '').toLowerCase();
   return t.includes('monitor');
@@ -70,19 +67,20 @@ function App() {
   const [equipoAEliminarId, setEquipoAEliminarId] = useState(null);
   const [motivoBaja, setMotivoBaja] = useState('');
   const [enviandoBaja, setEnviandoBaja] = useState(false);
-  // ===== DESASIGNAR EQUIPO DE UNA PERSONA (sin eliminarlo) =====
   const [equipoADesasignarId, setEquipoADesasignarId] = useState(null);
   const [motivoDesasignacion, setMotivoDesasignacion] = useState('');
   const [enviandoDesasignacion, setEnviandoDesasignacion] = useState(false);
   const [qrEquipoCodigo, setQrEquipoCodigo] = useState(null);
   const [filtroReporte, setFiltroReporte] = useState('todos');
-  // ===== Filtros de la tabla "Equipos" (misma idea que el filtro de Reportes) =====
-  const [filtroTablaUbicacion, setFiltroTablaUbicacion] = useState('todos'); // 'todos' | 'lab-<id>' | 'area-<id>'
-  const [filtroTablaEstado, setFiltroTablaEstado] = useState('todos'); // 'todos' | 'Operativo' | 'Mantenimiento' | 'Dañado'
+  const [filtroTablaUbicacion, setFiltroTablaUbicacion] = useState('todos');
+  const [filtroTablaEstado, setFiltroTablaEstado] = useState('todos');
   const [navbarOpen, setNavbarOpen] = useState(false);
   const [laboratorioSeleccionado, setLaboratorioSeleccionado] = useState(null);
   const [areaSeleccionada, setAreaSeleccionada] = useState(null);
   const [personaSeleccionada, setPersonaSeleccionada] = useState(null);
+
+  // ===== NUEVO ESTADO PARA REGISTRO DE PASSKEY =====
+  const [registrandoPasskey, setRegistrandoPasskey] = useState(false);
 
   // ===== CATÁLOGOS =====
   const [catalogos, setCatalogos] = useState({
@@ -94,16 +92,10 @@ function App() {
     discos: [],
   });
 
-  // Detecta si el tipo seleccionado es Monitor o N/A, para mostrar solo Marca/Modelo/Serie
-  // (oculta procesador/RAM/disco/año en el formulario, sin afectar la categoría de ocupación)
   const esSinEspecificaciones = form.tipo.toLowerCase().includes('monitor') || form.tipo.toLowerCase().includes('n/a');
-
-  // Atajo para saber si el usuario actual es administrador
   const esAdmin = usuario?.rol === 'admin';
 
   // ==================== NAVEGACIÓN ====================
-  // Antes esto estaba repetido (6 líneas) en cada uno de los 8 botones del
-  // navbar. Ahora todos llaman a esta única función para limpiar la vista.
   const irA = (vista) => {
     setVistaActual(vista);
     setPcSeleccionadaId(null);
@@ -133,12 +125,10 @@ function App() {
       setCatalogos(data);
     } catch (error) {
       console.error('Error cargando catálogos:', error);
-      // No lanzamos error para no romper la UI
     }
   }, []);
 
   const cargarInventario = useCallback(async () => {
-    // Si no hay usuario, no cargamos datos
     if (!usuario) {
       setCargando(false);
       return;
@@ -148,7 +138,6 @@ function App() {
     setErrorConexion(false);
 
     try {
-      // 1. Computadoras con laboratorio (solo activas, no eliminadas)
       const { data: comps, error: compError } = await supabase
         .from('computadoras')
         .select(`
@@ -167,7 +156,6 @@ function App() {
       }));
       setComputadoras(compsFormateadas);
 
-      // 2. Laboratorios
       let labs = [];
       try {
         const { data, error } = await supabase.from('laboratorios').select('*').order('nombre');
@@ -176,7 +164,6 @@ function App() {
         console.warn('Error cargando laboratorios:', e);
       }
 
-      // 3. Áreas
       let areas = [];
       try {
         const { data, error } = await supabase.from('areas').select('*').order('nombre');
@@ -185,7 +172,6 @@ function App() {
         console.warn('Error cargando áreas:', e);
       }
 
-      // 4. Personas
       let personas = [];
       try {
         const { data, error } = await supabase.from('personas').select('*').order('nombre');
@@ -194,15 +180,11 @@ function App() {
         console.warn('Error cargando personas:', e);
       }
 
-      // 5. Estadísticas (solo sobre equipos activos)
       const total = comps.length;
       const operativos = comps.filter(c => c.estado === 'Operativo').length;
       const mantenimiento = comps.filter(c => c.estado === 'Mantenimiento').length;
       const danados = comps.filter(c => c.estado === 'Dañado').length;
 
-      // El código de inventario ya no se calcula aquí: lo genera un trigger
-      // en Supabase (secuencia atómica) al momento de insertar, para que
-      // nunca se repita aunque varias personas registren equipos a la vez.
       setDashboardData({
         codigo_automatico: 'Se generará automáticamente',
         laboratorios: labs,
@@ -222,16 +204,12 @@ function App() {
 
   useEffect(() => {
     cargarInventario();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuario]);
 
   useEffect(() => {
     cargarCatalogos();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Si un usuario no-admin quedó posicionado en una vista restringida (por ejemplo,
-  // cambiando de sesión), lo regresamos a "Equipos" automáticamente.
   useEffect(() => {
     if (!esAdmin && (vistaActual === 'papelera' || vistaActual === 'personas' || vistaActual === 'catalogos')) {
       setVistaActual('equipos');
@@ -241,7 +219,6 @@ function App() {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === 'ubicacion' && !value.startsWith('area-')) {
-      // Si la ubicación no es un Área Administrativa, no se puede asignar a ninguna persona
       setForm(prev => ({ ...prev, ubicacion: value, persona_id: '' }));
     } else {
       setForm(prev => ({ ...prev, [name]: value }));
@@ -257,7 +234,6 @@ function App() {
     if (!form.modelo) faltantes.push('MODELO');
     if (!form.numero_serie.trim()) faltantes.push('SERIE');
 
-    // Procesador, RAM, Disco y Año solo aplican para CPU/Laptop, no para Monitor/N-A
     if (!esSinEspecificaciones) {
       if (!form.procesador) faltantes.push('PROCESADOR');
       if (!form.ram_gb) faltantes.push('RAM (GB)');
@@ -268,7 +244,6 @@ function App() {
     if (!form.estado) faltantes.push('ESTADO');
     if (!form.ubicacion) faltantes.push('UBICACIÓN');
 
-    // Si la ubicación es un Área Administrativa, también se exige asignar una persona
     if (form.ubicacion.startsWith('area-') && !form.persona_id) {
       faltantes.push('ASIGNAR A');
     }
@@ -300,7 +275,6 @@ function App() {
       if (!isNaN(num)) ramValue = num;
     }
 
-    // Interpreta la UBICACIÓN unificada ("lab-3" o "area-2") en la columna correcta
     let laboratorioId = null;
     let areaId = null;
     if (form.ubicacion.startsWith('lab-')) {
@@ -309,9 +283,6 @@ function App() {
       areaId = parseInt(form.ubicacion.replace('area-', ''));
     }
 
-    // Verificación de último momento contra la base de datos (no solo la lista en pantalla),
-    // por si otra persona asignó a este mismo colaborador justo antes de que guardaras.
-    // Se compara por CATEGORÍA: un CPU/N-A no choca con un Monitor ya asignado, y viceversa.
     if (areaId && form.persona_id) {
       const { data: equiposExistentes } = await supabase
         .from('computadoras')
@@ -334,15 +305,10 @@ function App() {
     }
 
     const payload = {
-      // No enviamos codigo_inventario: lo genera automáticamente el trigger
-      // de Supabase usando una secuencia atómica (evita duplicados si varias
-      // personas registran equipos al mismo tiempo).
       tipo: form.tipo || null,
       marca: form.marca || null,
       modelo: form.modelo || null,
       numero_serie: form.numero_serie || null,
-      // Los CPU/Laptop llevan procesador, RAM, disco y año.
-      // Los Monitores y N/A solo llevan marca, modelo y serie.
       procesador: esSinEspecificaciones ? null : (form.procesador || null),
       ram_gb: esSinEspecificaciones ? null : ramValue,
       disco: esSinEspecificaciones ? null : (form.disco || null),
@@ -350,15 +316,12 @@ function App() {
       estado: form.estado,
       laboratorio_id: laboratorioId,
       area_id: areaId,
-      // Solo se puede asignar a una persona si la ubicación es un Área Administrativa
       persona_id: (areaId && form.persona_id) ? parseInt(form.persona_id) : null,
       fecha_asignacion: (areaId && form.persona_id) ? new Date().toISOString() : null,
       notas: form.notas || null,
       eliminado: false,
     };
 
-    // .select().single() para recibir de vuelta la fila insertada,
-    // incluyendo el codigo_inventario que generó el trigger en Supabase
     const { data: nuevoEquipo, error } = await supabase
       .from('computadoras')
       .insert([payload])
@@ -375,11 +338,7 @@ function App() {
     setSubmitting(false);
   };
 
-  // ==================== ELIMINACIÓN (SOFT DELETE CON MOTIVO) ====================
-  // En vez de borrar el registro para siempre, se marca como eliminado y
-  // se guarda cuándo, quién y POR QUÉ lo hizo. El equipo pasa a "Historial".
-  // SOLO EL ADMINISTRADOR puede dar de baja equipos.
-
+  // ==================== ELIMINACIÓN (SOFT DELETE) ====================
   const abrirConfirmarEliminar = (id) => {
     if (!esAdmin) {
       alert('⛔ Solo un administrador puede dar de baja equipos.');
@@ -412,7 +371,6 @@ function App() {
     const motivo = motivoBaja.trim();
 
     try {
-      // Deja constancia en la bitácora del equipo (misma tabla que usa HistorialPC)
       const { error: histError } = await supabase
         .from('historial_mantenimiento')
         .insert([{
@@ -446,11 +404,7 @@ function App() {
     }
   };
 
-  // ==================== DESASIGNAR EQUIPO DE UNA PERSONA ====================
-  // Esto NO elimina el equipo: solo libera a la persona asignada (persona_id y
-  // fecha_asignacion vuelven a null), para que el equipo quede disponible de
-  // nuevo. Se exige un motivo y queda registrado en el Historial del equipo.
-
+  // ==================== DESASIGNAR EQUIPO ====================
   const abrirConfirmarDesasignar = (id) => {
     if (!esAdmin) {
       alert('⛔ Solo un administrador puede desasignar equipos de una persona.');
@@ -485,7 +439,6 @@ function App() {
     const personaAnterior = dashboardData.personas.find(p => p.id === equipo?.persona_id)?.nombre || 'persona desconocida';
 
     try {
-      // Deja constancia en la bitácora del equipo
       const { error: histError } = await supabase
         .from('historial_mantenimiento')
         .insert([{
@@ -518,6 +471,46 @@ function App() {
     }
   };
 
+  // ==================== REGISTRO DE PASSKEY (NUEVO) ====================
+  const registrarPasskey = async () => {
+    if (registrandoPasskey) return;
+    if (!usuario) {
+      alert('⚠️ Debes iniciar sesión con correo y contraseña antes de registrar un acceso biométrico.');
+      return;
+    }
+
+    // Verificar que el navegador soporte WebAuthn
+    if (!window.PublicKeyCredential) {
+      alert('❌ Tu navegador no soporta autenticación biométrica. Usa Chrome, Edge o Safari actualizado.');
+      return;
+    }
+
+    setRegistrandoPasskey(true);
+    try {
+      // Llamada a Supabase para registrar un nuevo passkey asociado al usuario actual
+      const { data, error } = await supabase.auth.registerPasskey({
+        email: usuario.email, // o el campo que identifique al usuario
+        // Opcional: puedes pasar un nombre descriptivo para el dispositivo
+        // name: `Dispositivo de ${usuario.nombre}`
+      });
+
+      if (error) {
+        console.error('Error al registrar passkey:', error);
+        alert(`❌ No se pudo registrar el acceso biométrico: ${error.message}`);
+        return;
+      }
+
+      // Si la operación fue exitosa, Supabase devuelve un objeto con información
+      alert('✅ ¡Acceso biométrico activado! Ya puedes iniciar sesión con tu huella, Face ID o PIN.');
+    } catch (err) {
+      console.error('Error inesperado:', err);
+      alert('❌ Ocurrió un error inesperado. Intenta de nuevo más tarde.');
+    } finally {
+      setRegistrandoPasskey(false);
+    }
+  };
+
+  // ==================== LOGOUT ====================
   const handleLogout = () => {
     supabase.auth.signOut();
     setUsuario(null);
@@ -537,6 +530,7 @@ function App() {
     setNavbarOpen(false);
   };
 
+  // ==================== MEMOS ====================
   const computadorasFiltradas = useMemo(() => {
     const query = busqueda.toLowerCase().trim();
     if (!query) return computadoras;
@@ -549,7 +543,6 @@ function App() {
     );
   }, [computadoras, busqueda, dashboardData.personas]);
 
-  // Personas que YA tienen un MONITOR activo asignado (solo tipo "Monitor")
   const personasConMonitor = useMemo(() => {
     const ids = new Set();
     computadoras.forEach(c => {
@@ -558,7 +551,6 @@ function App() {
     return ids;
   }, [computadoras]);
 
-  // Personas que YA tienen un CPU/Laptop/N-A activo asignado (todo lo que no es Monitor)
   const personasConCPU = useMemo(() => {
     const ids = new Set();
     computadoras.forEach(c => {
@@ -567,7 +559,6 @@ function App() {
     return ids;
   }, [computadoras]);
 
-  // Personas que YA tienen tanto CPU/Laptop como Monitor asignado (completas)
   const personasCompletas = useMemo(() => {
     const ids = new Set();
     dashboardData.personas.forEach(p => {
@@ -576,12 +567,7 @@ function App() {
     return ids;
   }, [dashboardData.personas, personasConMonitor, personasConCPU]);
 
-  // Bandera específica de OCUPACIÓN (distinta de esSinEspecificaciones, que solo
-  // controla qué campos mostrar). "N/A" cuenta como CPU aquí, no como Monitor.
   const formEsCategoriaMonitor = esCategoriaMonitor(form.tipo);
-
-  // Set que se usa en el formulario de "Registrar Nuevo Activo": depende de si
-  // se está registrando un Monitor o un CPU/Laptop/N-A, para no repetir el mismo tipo.
   const personasOcupadas = formEsCategoriaMonitor ? personasConMonitor : personasConCPU;
 
   const datosGrafico = useMemo(() => ({
@@ -681,8 +667,6 @@ function App() {
     sheet.getRow(3).height = 18;
     sheet.getRow(4).height = 18;
 
-    // Agrupar equipos: cada CPU/Laptop/Desktop abre un ítem nuevo; lo que sigue
-    // (ej. un Monitor) se agrupa con él.
     const grupos = [];
     equipos.forEach(equipo => {
       const tipoUpper = (equipo.tipo || '').toUpperCase();
@@ -832,23 +816,22 @@ function App() {
         fillColor: [246, 250, 248],
       },
       columnStyles: {
-        0: { cellWidth: 10 },   // Nº
-        1: { cellWidth: 18 },   // Código
-        2: { cellWidth: 14 },   // Tipo
-        3: { cellWidth: 16 },   // Marca
-        4: { cellWidth: 22 },   // Modelo
-        5: { cellWidth: 22 },   // Serie
-        6: { cellWidth: 28 },   // Procesador
-        7: { cellWidth: 16 },   // RAM
-        8: { cellWidth: 16 },   // Disco
-        9: { cellWidth: 12 },   // Año
-        10: { cellWidth: 20 },  // Estado
-        11: { cellWidth: 24 },  // Laboratorio
-        12: { cellWidth: 18 },  // Área
-        13: { cellWidth: 24 },  // Asignado a
-        14: { cellWidth: 20 },  // Fecha Asig.
+        0: { cellWidth: 10 },
+        1: { cellWidth: 18 },
+        2: { cellWidth: 14 },
+        3: { cellWidth: 16 },
+        4: { cellWidth: 22 },
+        5: { cellWidth: 22 },
+        6: { cellWidth: 28 },
+        7: { cellWidth: 16 },
+        8: { cellWidth: 16 },
+        9: { cellWidth: 12 },
+        10: { cellWidth: 20 },
+        11: { cellWidth: 24 },
+        12: { cellWidth: 18 },
+        13: { cellWidth: 24 },
+        14: { cellWidth: 20 },
       },
-      // (antes esta línea "margin" estaba duplicada; se dejó una sola vez)
       margin: { left: 8, right: 8, bottom: 16 },
       didDrawPage: function () {
         doc.setFontSize(8);
@@ -860,7 +843,7 @@ function App() {
   };
 
   // ============================================================
-  // TABLA DE EQUIPOS (con filtros)
+  // TABLA DE EQUIPOS
   // ============================================================
   const renderTablaEquipos = (filtroLabId = null, filtroAreaId = null, filtroPersonaId = null) => {
     let equiposMostrar = computadorasFiltradas;
@@ -874,9 +857,6 @@ function App() {
       equiposMostrar = equiposMostrar.filter(c => c.persona_id === filtroPersonaId);
     }
 
-    // Los filtros de ubicación/estado de la vista principal "Equipos" solo
-    // aplican cuando la tabla se llama sin un filtro de contexto ya impuesto
-    // desde afuera (Laboratorios, Administrativo o Personas).
     const esVistaPrincipal = !filtroLabId && !filtroAreaId && !filtroPersonaId;
     if (esVistaPrincipal) {
       if (filtroTablaUbicacion !== 'todos') {
@@ -1212,7 +1192,7 @@ function App() {
                         className="form-control app-input rounded-3 py-2"
                         value={form.ano ? `${form.ano}-01` : ''}
                         onChange={(e) => {
-                          const valor = e.target.value; // formato "YYYY-MM"
+                          const valor = e.target.value;
                           const anioExtraido = valor ? valor.split('-')[0] : '';
                           setForm(prev => ({ ...prev, ano: anioExtraido }));
                         }}
@@ -1580,6 +1560,21 @@ function App() {
                   <i className="bi bi-person-badge me-1"></i> {usuario.rol === 'admin' ? 'Administrador' : 'Técnico'}
                 </span>
               </div>
+
+              {/* ===== NUEVO BOTÓN DE REGISTRO DE PASSKEY (SOLO ADMIN) ===== */}
+              {esAdmin && (
+                <button
+                  onClick={registrarPasskey}
+                  disabled={registrandoPasskey}
+                  className="btn btn-sm btn-outline-light rounded-3 px-3 py-1.5 d-flex align-items-center gap-2 fw-semibold"
+                  style={{ borderColor: 'rgba(255,255,255,0.4)', transition: 'all 0.2s' }}
+                  title="Registrar tu huella, Face ID o PIN para inicio rápido"
+                >
+                  <i className="bi bi-fingerprint me-1"></i>
+                  {registrandoPasskey ? 'Registrando...' : 'Activar biométrico'}
+                </button>
+              )}
+
               <button
                 onClick={() => { handleLogout(); setNavbarOpen(false); }}
                 className="btn btn-sm btn-danger rounded-3 px-3 py-1.5 d-flex align-items-center gap-2 fw-semibold"
@@ -1605,7 +1600,7 @@ function App() {
         )}
       </div>
 
-      {/* MODAL: Confirmar eliminación con motivo obligatorio (solo administrador) */}
+      {/* MODALES (eliminación, desasignación, QR) - sin cambios */}
       {equipoAEliminarId && esAdmin && (
         <div className="modal-overlay" onClick={cancelarEliminar}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
@@ -1616,14 +1611,12 @@ function App() {
               </h6>
               <button type="button" className="btn-close shadow-none" onClick={cancelarEliminar} disabled={enviandoBaja}></button>
             </div>
-
             <div className="p-4">
               <p className="text-secondary small mb-3">
                 El equipo <strong>{computadoras.find(c => c.id === equipoAEliminarId)?.codigo_inventario}</strong> no se
                 borrará: se moverá al <strong>Historial de Bajas</strong> y podrás restaurarlo cuando quieras. Para
                 continuar, indica el motivo de la baja.
               </p>
-
               <label className="form-label fw-semibold text-secondary small">
                 Motivo de la eliminación <span className="text-danger">*</span>
               </label>
@@ -1638,32 +1631,10 @@ function App() {
                 disabled={enviandoBaja}
               />
               <small className="text-muted d-block mt-1">{motivoBaja.length}/200</small>
-
               <div className="d-flex gap-2 mt-4">
-                <button
-                  type="button"
-                  className="btn btn-light border w-100 py-2 text-secondary fw-semibold"
-                  onClick={cancelarEliminar}
-                  disabled={enviandoBaja}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-danger w-100 py-2 fw-semibold"
-                  onClick={confirmarEliminarEquipo}
-                  disabled={enviandoBaja || !motivoBaja.trim()}
-                >
-                  {enviandoBaja ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                      Eliminando...
-                    </>
-                  ) : (
-                    <>
-                      <i className="bi bi-trash3 me-2"></i>Confirmar Baja
-                    </>
-                  )}
+                <button type="button" className="btn btn-light border w-100 py-2 text-secondary fw-semibold" onClick={cancelarEliminar} disabled={enviandoBaja}>Cancelar</button>
+                <button type="button" className="btn btn-danger w-100 py-2 fw-semibold" onClick={confirmarEliminarEquipo} disabled={enviandoBaja || !motivoBaja.trim()}>
+                  {enviandoBaja ? <><span className="spinner-border spinner-border-sm me-2" role="status"></span>Eliminando...</> : <><i className="bi bi-trash3 me-2"></i>Confirmar Baja</>}
                 </button>
               </div>
             </div>
@@ -1671,7 +1642,6 @@ function App() {
         </div>
       )}
 
-      {/* MODAL: Desasignar equipo de una persona (con motivo obligatorio) */}
       {equipoADesasignarId && esAdmin && (
         <div className="modal-overlay" onClick={cancelarDesasignar}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
@@ -1682,7 +1652,6 @@ function App() {
               </h6>
               <button type="button" className="btn-close shadow-none" onClick={cancelarDesasignar} disabled={enviandoDesasignacion}></button>
             </div>
-
             <div className="p-4">
               <p className="text-secondary small mb-3">
                 El equipo <strong>{computadoras.find(c => c.id === equipoADesasignarId)?.codigo_inventario}</strong> se
@@ -1692,7 +1661,6 @@ function App() {
                 </strong>. El equipo <strong>no se elimina</strong>: solo queda disponible para asignarse a alguien más,
                 y esta acción quedará registrada en su Historial.
               </p>
-
               <label className="form-label fw-semibold text-secondary small">
                 Motivo de la desasignación <span className="text-danger">*</span>
               </label>
@@ -1707,32 +1675,10 @@ function App() {
                 disabled={enviandoDesasignacion}
               />
               <small className="text-muted d-block mt-1">{motivoDesasignacion.length}/200</small>
-
               <div className="d-flex gap-2 mt-4">
-                <button
-                  type="button"
-                  className="btn btn-light border w-100 py-2 text-secondary fw-semibold"
-                  onClick={cancelarDesasignar}
-                  disabled={enviandoDesasignacion}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary w-100 py-2 fw-semibold"
-                  onClick={confirmarDesasignarEquipo}
-                  disabled={enviandoDesasignacion || !motivoDesasignacion.trim()}
-                >
-                  {enviandoDesasignacion ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                      Desasignando...
-                    </>
-                  ) : (
-                    <>
-                      <i className="bi bi-person-dash me-2"></i>Confirmar Desasignación
-                    </>
-                  )}
+                <button type="button" className="btn btn-light border w-100 py-2 text-secondary fw-semibold" onClick={cancelarDesasignar} disabled={enviandoDesasignacion}>Cancelar</button>
+                <button type="button" className="btn btn-secondary w-100 py-2 fw-semibold" onClick={confirmarDesasignarEquipo} disabled={enviandoDesasignacion || !motivoDesasignacion.trim()}>
+                  {enviandoDesasignacion ? <><span className="spinner-border spinner-border-sm me-2" role="status"></span>Desasignando...</> : <><i className="bi bi-person-dash me-2"></i>Confirmar Desasignación</>}
                 </button>
               </div>
             </div>
@@ -1740,12 +1686,10 @@ function App() {
         </div>
       )}
 
-      {/* MODAL: Código QR */}
       {qrEquipoCodigo && (
         <CodigoQR codigo={qrEquipoCodigo} onClose={() => setQrEquipoCodigo(null)} />
       )}
 
-      {/* ESTILOS */}
       <style>{`
         .app-shell { background: linear-gradient(180deg, #f4faf7 0%, #f8fafc 260px, #f8fafc 100%); }
         .app-navbar { background: linear-gradient(120deg, #065f46 0%, #10b981 100%); border-bottom: none; min-height: 60px; }
